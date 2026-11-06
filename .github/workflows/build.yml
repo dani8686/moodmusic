@@ -1,0 +1,37 @@
+name: Build signed APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unpack phone-uploaded source (if present)
+        run: if [ -f mood-source.zip ]; then unzip -oq mood-source.zip; fi
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Install SDK 34
+        run: sdkmanager 'platforms;android-34' 'build-tools;34.0.0'
+      - name: Build release APK
+        run: gradle --no-daemon :app:assembleRelease
+      - name: Check that no INTERNET permission is declared
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump permissions "$APK" | tee /tmp/permissions.txt
+          if grep -q 'android.permission.INTERNET' /tmp/permissions.txt; then exit 1; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MoodMusicSorter-signed-APK
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
