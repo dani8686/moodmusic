@@ -1,39 +1,66 @@
-name: Build signed APK
-on:
-  workflow_dispatch:
-  push:
-    branches: [ main ]
-permissions:
-  contents: read
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Unpack phone-uploaded source (if present)
-        run: if [ -f mood-source.zip ]; then unzip -oq mood-source.zip; fi
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.7'
-      - name: Install SDK 34
-        run: |
-          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKM" --licenses > /dev/null || true
-          "$SDKM" "platforms;android-34" "build-tools;34.0.0"
-      - name: Build release APK
-        run: gradle --no-daemon :app:assembleRelease
-      - name: Check that no INTERNET permission is declared
-        run: |
-          APK=app/build/outputs/apk/release/app-release.apk
-          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump permissions "$APK" | tee /tmp/permissions.txt
-          if grep -q 'android.permission.INTERNET' /tmp/permissions.txt; then exit 1; fi
-      - uses: actions/upload-artifact@v4
-        with:
-          name: MoodMusicSorter-signed-APK
-          path: app/build/outputs/apk/release/app-release.apk
-          if-no-files-found: error
-          retention-days: 30
+# Mood Music Sorter — نسخه ۲
+
+اپلیکیشن اندروید «مرتب\u200cساز مود موزیک» برای **دانیال موسوی**.
+بسته: `com.daniel.mood` · نسخه: `2.0.0` (versionCode 2) · حداقل اندروید 8 (API 26) · هدف API 34 · مناسب **Redmi Note 10S / Android 13**.
+
+## خلاصه تغییرات نسبت به نسخه ۱
+
+سورس نسخه ۱ فقط داخل یک فایل ZIP در مخزن بود و هرگز کامپایل نشده بود. در این شاخه، پروژه واقعی اندروید از ZIP استخراج و به\u200cصورت فایل\u200cهای معمولی در ریشه مخزن قرار گرفت؛ بنابراین دیگر هیچ مرحلهٔ دستی «باز کردن ZIP» برای ساخت وجود ندارد. هفت قابلیت درخواست\u200cشده روی همان معماری Compose + Room + Media3 پیاده\u200cسازی و یکپارچه شدند.
+
+| # | قابلیت | وضعیت |
+|---|--------|-------|
+| ۱ | تشخیص حال\u200cوهوا از **خود سیگنال صوتی** + یادگیری واقعی از اصلاح\u200cهای دستی | COMPLETE |
+| ۲ | پخش\u200cکننده کامل با سرویس پیش\u200cزمینه Media3، اعلان، صف، Shuffle/Repeat و تمرکز صدا | COMPLETE |
+| ۳ | رابط تاریک مدرن، فارسی RTL، تم رنگی هر حال\u200cوهوا، کاور آلبوم | COMPLETE |
+| ۴ | اسکن افزایشی، کش ویژگی\u200cها، هم\u200cزمانی محدود، پردازش پس\u200cزمینه | COMPLETE |
+| ۵ | جست\u200cوجو، پلی\u200cلیست، تغییر دسته، مرتب\u200cسازی، مهاجرت امن دیتابیس | COMPLETE |
+| ۶ | کپی واقعی هر دسته به پوشه/USB OTG، اشتراک\u200cگذاری و خروجی ZIP | COMPLETE |
+| ۷ | آیکون تطبیقی (Adaptive Icon) بر اساس تصویر ارسالی | COMPLETE |
+
+توضیح دقیق\u200cتر: [docs/V2-SCOPE-FA.md](docs/V2-SCOPE-FA.md) · امنیت و کلید امضا: [docs/SECURITY-FA.md](docs/SECURITY-FA.md) · نصب: [docs/BUILD-FA.md](docs/BUILD-FA.md)
+
+## معماری (خلاصه)
+
+```
+app/src/main/java/com/daniel/mood/
+  MoodCatalog.kt      برچسب\u200cها، رنگ\u200cها، فرمت فارسی (خالص Kotlin، قابل تست JVM)
+  MoodModel.kt        استخراج امتیاز صوتی + مدل یادگیری nearest-prototype + کش ویژگی\u200cها
+  AudioAnalysis.kt    MediaCodec/MediaExtractor → PCM → FFT/کروما/ریتم/انرژی (کاملاً محلی)
+  Database.kt         Room v2 + مهاجرت 1→2 بدون پاک\u200cکردن داده\u200cها
+  MusicRepository.kt  اصلاح دستی، بازسازی الگوها، امتیازدهی مجدد از کش، پلی\u200cلیست، صف
+  ScanService.kt      سرویس پیش\u200cزمینه، اسکن افزایشی، پیشرفت/مکث/لغو
+  PlaybackService.kt  MediaSessionService + ذخیره/بازگردانی صف و موقعیت
+  ExportHelper.kt     SAF / OTG / ZIP / Sharesheet / FileProvider
+  AlbumArtLoader.kt   کش کوچک کاور آلبوم
+  MainActivity.kt     هماهنگی رابط، مجوزها، پخش، خروجی
+  ui/                 تم، کامپوننت\u200cها، صفحه\u200cها، دیالوگ\u200cها
+app/src/test/         تست\u200cهای واحد JVM (بدون نیاز به دستگاه)
+```
+
+**حریم خصوصی:** هیچ مجوز `INTERNET` در مانیفست وجود ندارد (حتی به\u200cصورت `tools:node="remove"` حذف شده است). تحلیل صوت، طبقه\u200cبندی، جست\u200cوجو و خروجی همگی روی دستگاه و آفلاین انجام می\u200cشوند؛ هیچ فایل صوتی آپلود نمی\u200cشود.
+
+## ساخت
+
+ساخت از طریق GitHub Actions انجام می\u200cشود (در این محیط SDK/Java/Maven در دسترس نیست):
+
+```
+gradle --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease
+```
+
+خروجی: `app/build/outputs/apk/release/app-release.apk` به\u200cهمراه artifact در Actions.
+جزئیات کلید امضا و محدودیت تنظیم Secret: [docs/SECURITY-FA.md](docs/SECURITY-FA.md).
+
+## یادگیری از اصلاح دستی (واقعی، نه ادعا)
+
+- هر آهنگ یک بردار ۱۳بعدی از ویژگی\u200cهای صوتی دارد که در دیتابیس کش می\u200cشود.
+- وقتی دستهٔ آهنگی را دستی تغییر می\u200cدهید، رکورد `mood_corrections` ذخیره می\u200cشود (جدا از `predictedMood`).
+- برای هر دسته، میانگین بردارهای اصلاح\u200cشده به\u200cعنوان **الگو (prototype)** ساخته می\u200cشود.
+- طبقه\u200cبند، شباهت بردار آهنگ به این الگوها را به امتیاز آن دسته اضافه می\u200cکند؛ سپس **کل کتابخانه فقط از روی کش** (بدون decode دوباره) امتیازدهی می\u200cشود.
+- آهنگ\u200cهای کم\u200cاطمینان با برچسب «نیازمند بررسی» نمایش داده می\u200cشوند، نه یک دستهٔ قطعی.
+- «بازگشت به تشخیص خودکار» اصلاح را حذف و الگوها را دوباره می\u200cسازد.
+
+این یک مدل ساده و شفافِ یادگیری آنلاین است، نه ادعای تشخیص احساس با دقت آزمایشگاهی. برچسب\u200cها تخمین آکوستیک هستند.
+
+## مستندات قدیمی
+
+متن README نسخهٔ ۱ (شامل هشدارهای «کامپایل\u200cنشده») در `docs/V1-SOURCE-README.md` و کیت پیاده\u200cسازی ارسالی در `docs/V2-IMPLEMENTATION-KIT.md` نگهداری شده است. فونت bundel\u200cشده DejaVu است؛ پروانه در `FONT-LICENSE.txt`.

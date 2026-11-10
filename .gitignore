@@ -1,0 +1,17 @@
+.gradle/
+.idea/
+local.properties
+build/
+app/build/
+captures/
+*.iml
+.DS_Store
+# Signing material must never be committed.
+*.p12
+*.jks
+*.keystore
+keystore*.properties
+# Locally downloaded deliverables (APKs are published as CI/release artifacts).
+*.apk
+*.apk.idsig
+*.log

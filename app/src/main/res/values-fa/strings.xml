@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">مرتب\u200cساز مود موزیک</string>
+    <string name="scan_channel">تحلیل موسیقی</string>
+    <string name="playback_channel">پخش موسیقی</string>
+</resources>

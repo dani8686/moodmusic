@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Mood Music Sorter</string>
+    <string name="scan_channel">Music analysis</string>
+    <string name="playback_channel">Music playback</string>
+</resources>
