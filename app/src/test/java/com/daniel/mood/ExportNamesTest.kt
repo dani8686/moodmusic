@@ -8,7 +8,7 @@ class ExportNamesTest {
         val used = mutableSetOf<String>()
         assertEquals("song.mp3", ExportNames.unique("song.mp3", used))
         assertEquals("song_2.mp3", ExportNames.unique("song.mp3", used))
-        assertEquals("song_3.mp3", ExportNames.unique("SONG.MP3", used))
+        assertEquals("SONG_3.MP3", ExportNames.unique("SONG.MP3", used))
     }
 
     @Test fun unsafePathsCannotEscapeZipOrFolder() {
