@@ -15,16 +15,23 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      # GitHub's Ubuntu image already includes the Android SDK and sdkmanager.
+      # GitHub's Ubuntu image already includes the Android SDK command-line tools.
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
       - name: Install Android SDK 34
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager 'platforms;android-34' 'build-tools;34.0.0'
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" 'platforms;android-34' 'build-tools;34.0.0'
       - name: Unit tests, lint and debug APK
-        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+        run: |
+          if ! ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug > /tmp/mood-build.log 2>&1; then
+            cat /tmp/mood-build.log
+            printf '::error::%s\n' "$(tail -n 100 /tmp/mood-build.log)"
+            exit 1
+          fi
+          cat /tmp/mood-build.log
       - name: Decode optional production signing key
         env:
           MOOD_KEYSTORE_BASE64: ${{ secrets.MOOD_KEYSTORE_BASE64 }}

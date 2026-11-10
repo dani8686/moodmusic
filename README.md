@@ -1,39 +1,55 @@
-name: Build signed APK
-on:
-  workflow_dispatch:
-  push:
-    branches: [ main ]
-permissions:
-  contents: read
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Unpack phone-uploaded source (if present)
-        run: if [ -f mood-source.zip ]; then unzip -oq mood-source.zip; fi
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.7'
-      - name: Install SDK 34
-        run: |
-          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKM" --licenses > /dev/null || true
-          "$SDKM" "platforms;android-34" "build-tools;34.0.0"
-      - name: Build release APK
-        run: gradle --no-daemon :app:assembleRelease
-      - name: Check that no INTERNET permission is declared
-        run: |
-          APK=app/build/outputs/apk/release/app-release.apk
-          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump permissions "$APK" | tee /tmp/permissions.txt
-          if grep -q 'android.permission.INTERNET' /tmp/permissions.txt; then exit 1; fi
-      - uses: actions/upload-artifact@v4
-        with:
-          name: MoodMusicSorter-signed-APK
-          path: app/build/outputs/apk/release/app-release.apk
-          if-no-files-found: error
-          retention-days: 30
+# Mood Music Sorter 2.0
+
+اپلیکیشن آفلاین اندروید برای دسته‌بندی حال‌وهوای موسیقی، پخش پس‌زمینه، مدیریت کتابخانه و خروجی واقعی فایل‌ها.
+
+- Package: `com.daniel.mood`
+- Version: `2.0` (`versionCode=2`)
+- Android 8.0 (API 26) تا Android 14 (target/compile 34)
+- توسعه‌دهنده: **Danial Mousavi**
+- بدون مجوز INTERNET، بدون API پولی و بدون ارسال فایل صوتی
+
+## اجرا و ساخت
+
+```bash
+./gradlew testDebugUnitTest lintDebug assembleDebug
+./gradlew assembleRelease
+```
+
+APK آزمایشی Debug در `app/build/outputs/apk/debug/app-debug.apk` ساخته می‌شود. اگر Secrets امضا تنظیم نشده باشد، Release با کلید Debug امضا می‌شود و فقط برای آزمایش است؛ برای انتشار و به‌روزرسانی پایدار باید Secrets زیر را در GitHub Actions تنظیم کنید:
+
+- `MOOD_KEYSTORE_BASE64`
+- `MOOD_KEYSTORE_PASSWORD`
+- `MOOD_KEY_ALIAS`
+- `MOOD_KEY_PASSWORD`
+- مسیر فایل داخل Runner به‌صورت خودکار `MOOD_KEYSTORE_FILE` تنظیم می‌شود.
+
+## قابلیت‌ها
+
+1. **تحلیل محلی صوت:** نمونه‌برداری از سه بخش فایل، MediaCodec، FFT، RMS و دینامیک، Centroid/Rolloff/Flux، Chroma و تخمین مُد، Zero Crossing، Bass، Onset و تخمین BPM. هیچ عنوان، نام فایل یا تگ ID3 وارد دسته‌بند نمی‌شود.
+2. **ده دسته:** شاد، غمگین، آرام، بارونی، نوستالژیک، عاشقانه، ورزشی، پرانرژی، احساسی و بی‌کلام؛ دسته جدا برای فایل خراب/نشده. نتایج کم‌اطمینان با «بازبینی» نمایش داده می‌شوند.
+3. **یادگیری واقعی و قابل بازگشت:** هر اصلاح دستی، بردار صوتی نرمال‌شده را به centroid همان دسته اضافه می‌کند. تغییر اصلاح، بردار قبلی را کم و بردار تازه را اضافه می‌کند. «بازگشت به تشخیص خودکار» اثر اصلاح را از centroid حذف می‌کند. اطلاعات در Room باقی می‌مانند و تأثیر یادگیری محدود است تا چند اصلاح کل مدل را مختل نکنند.
+4. **پخش Media3:** سرویس Foreground مستقل از Activity، MediaSession و اعلان سیستم، Audio Focus و Becoming Noisy، صف، حذف و جابه‌جایی، Shuffle و سه حالت Repeat، Seek و بازیابی صف/موقعیت پس از ساخت دوباره فرایند (بدون شروع ناخواسته صدا).
+5. **کتابخانه:** جستجوی عنوان/خواننده، مرتب‌سازی، اسکن افزایشی، کش ویژگی‌ها، حذف رکورد فایل‌های حذف‌شده، جلوگیری از تکرار بر اساس MediaStore ID، پلی‌لیست با ساخت/تغییر نام/حذف و افزودن/حذف آهنگ.
+6. **خروجی:** کپی بایت‌های واقعی به پوشه دسته از طریق SAF (از جمله OTG سازگار)، نام یکتا و بدون بازنویسی، پیشرفت و گزارش خطا، ZIP واقعی و Sharesheet. برای جلوگیری از خطای Binder، اشتراک‌گذاری دسته‌های بسیار بزرگ در یک بسته حداکثر ۱۰۰ آهنگ و ۱۵۰ مگابایت انجام می‌شود.
+7. **رابط و آیکون:** رابط Compose تیره، فارسی RTL و انگلیسی، رنگ متناسب با دسته، کاور آلبوم، صف پخش و آیکون Adaptive از طرح اختصاصی کاربر.
+
+## معماری
+
+- `AudioAnalysis.kt` / `MoodEngine.kt`: Decode و ویژگی‌های صوتی، امتیازدهی و یادگیری centroid
+- `Database.kt`: Room نسخه ۲، Migration غیرمخرب از نسخه ۱، اصلاحات و پلی‌لیست‌ها
+- `ScanService.kt`: اسکن افزایشی با حداکثر دو Worker و WakeLock محدود
+- `PlaybackService.kt`: Media3/ExoPlayer و ذخیره صف
+- `CategoryExport.kt` / `ExportService.kt`: SAF، کپی، ZIP و پیشرفت پس‌زمینه
+- `MainActivity.kt` / `PlayerUi.kt` / `Theme.kt`: رابط فارسی/انگلیسی
+
+## امنیت کلید قدیمی — مهم
+
+نسخه اولیه مخزن، فایل `mood-source (1).zip` را با `signing.p12` و رمز ثابت در Gradle منتشر کرده بود. بنابراین آن کلید **افشاشده و ناامن** است. سورس در شاخه V2 از ZIP خارج شده و کلید و رمز از وضعیت فعلی حذف شده‌اند. تاریخچه عمومی Git عمداً بازنویسی نشده است؛ حذف Commit جدید به‌تنهایی افشای قبلی را برطرف نمی‌کند.
+
+برای انتشار واقعی باید یک کلید تازه و پشتیبان‌گیری‌شده استفاده شود. تعویض کلید به این معنی است که APK جدید روی نسخه امضاشده با کلید قدیمی به‌صورت Update نصب نمی‌شود؛ ابتدا از اطلاعات مهم پشتیبان بگیرید و نسخه قبلی را حذف کنید. برای حفظ کلید تازه، آن را فقط در محل امن خصوصی و GitHub Actions Secrets نگه دارید.
+
+## محدودیت‌های صادقانه
+
+- تشخیص حال‌وهوا یک مدل سیگنال محلی و تطبیقی است، نه مدل اعتبارسنجی‌شده روی داده برچسب‌خورده فارسی. «بارونی»، «نوستالژیک» و «بی‌کلام» ذهنی/دشوار هستند و ممکن است نیاز به اصلاح داشته باشند.
+- تست OTG، بلوتوث، صفحه قفل، MIUI و اندازه کتابخانه واقعی به دستگاه فیزیکی نیاز دارد؛ موفقیت Build به‌تنهایی تأیید این موارد نیست.
+- صحت نصب و امضای APK در CI بررسی می‌شود. وضعیت آخرین اجرا در [Actions](../../actions) قابل مشاهده است.
