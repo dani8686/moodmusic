@@ -25,10 +25,10 @@ data class Song(
     val reason: String,
     val manual: Boolean,
     val seen: Long,
-    val autoMood: Int = mood,
-    val albumId: Long = -1L,
-    val featureData: String = "",
-    val analysisVersion: Int = 2
+    @ColumnInfo(defaultValue = "10") val autoMood: Int = mood,
+    @ColumnInfo(defaultValue = "-1") val albumId: Long = -1L,
+    @ColumnInfo(defaultValue = "''") val featureData: String = "",
+    @ColumnInfo(defaultValue = "2") val analysisVersion: Int = 2
 )
 
 @Entity(tableName = "mood_corrections", indices = [Index("correctedMood"), Index("audioUri")])
@@ -148,7 +148,8 @@ abstract class MoodDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE songs ADD COLUMN autoMood INTEGER NOT NULL DEFAULT 10")
                 db.execSQL("ALTER TABLE songs ADD COLUMN albumId INTEGER NOT NULL DEFAULT -1")
                 db.execSQL("ALTER TABLE songs ADD COLUMN featureData TEXT NOT NULL DEFAULT ''")
-                db.execSQL("ALTER TABLE songs ADD COLUMN analysisVersion INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE songs ADD COLUMN analysisVersion INTEGER NOT NULL DEFAULT 2")
+                db.execSQL("UPDATE songs SET analysisVersion=1")
                 val mapping = "CASE mood WHEN 0 THEN 0 WHEN 1 THEN 1 WHEN 2 THEN 2 WHEN 3 THEN 7 WHEN 4 THEN 5 WHEN 5 THEN 4 WHEN 6 THEN 2 WHEN 7 THEN 2 WHEN 8 THEN 0 WHEN 9 THEN 7 WHEN 10 THEN 7 WHEN 11 THEN 2 ELSE 10 END"
                 db.execSQL("UPDATE songs SET autoMood=$mapping, mood=$mapping")
                 db.execSQL("CREATE TABLE IF NOT EXISTS mood_corrections (trackId INTEGER NOT NULL, audioUri TEXT NOT NULL, predictedMood INTEGER NOT NULL, correctedMood INTEGER NOT NULL, modelConfidence REAL NOT NULL, features TEXT NOT NULL, correctedAt INTEGER NOT NULL, PRIMARY KEY(trackId))")
