@@ -13,8 +13,13 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 object ExportNames {
-    fun safe(value: String): String = value.replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), "_")
-        .trim().trim('.').take(120).ifBlank { "audio" }
+    fun safe(value: String): String {
+        val clean = value.replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), "_").trim().trim('.').ifBlank { "audio" }
+        if (clean.length <= 120) return clean
+        val dot = clean.lastIndexOf('.')
+        val extension = if (dot > 0 && clean.length - dot <= 16) clean.substring(dot) else ""
+        return clean.take(120 - extension.length) + extension
+    }
 
     /** Case-insensitive collision handling for FAT/exFAT USB drives and ZIP archives. */
     fun unique(requested: String, usedLowercase: MutableSet<String>): String {

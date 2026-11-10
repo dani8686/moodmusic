@@ -139,10 +139,19 @@ object AudioAnalysis {
         }
         val actual = max(1, f); val mean = envelope.take(f).average().let { if (it.isNaN()) 0.0 else it }
         var onset = 0; for (i in 1 until f-1) if (envelope[i] > mean*1.5 && envelope[i] > envelope[i-1] && envelope[i] >= envelope[i+1]) onset++
-        var best = 0.0; var bestLag = 0; var totalCorr = 0.0
+        var best = 0.0; var bestLag = 0
         val minLag = max(1, (60.0*RATE/(N/2)/200).roundToInt()); val maxLag = min(f-1, (60.0*RATE/(N/2)/55).roundToInt())
-        for (lag in minLag..maxLag) { var corr = 0.0; for (i in lag until f) corr += envelope[i].toDouble()*envelope[i-lag]; if (lag == minLag) totalCorr = corr; if (corr > best) { best = corr; bestLag = lag } }
-        val beat = if (totalCorr > 0) (best/totalCorr).toFloat().coerceIn(0f,1f) else 0f
+        // Mean removal and global-energy normalization prevent the shortest lag always winning.
+        val centered = FloatArray(f) { envelope[it] - mean.toFloat() }
+        var envelopeEnergy = 0.0
+        for (value in centered) envelopeEnergy += value * value
+        for (lag in minLag..maxLag) {
+            var corr = 0.0
+            for (i in lag until f) corr += centered[i].toDouble() * centered[i-lag]
+            val normalized = if (envelopeEnergy > 1e-9) corr / envelopeEnergy else 0.0
+            if (normalized > best) { best = normalized; bestLag = lag }
+        }
+        val beat = best.toFloat().coerceIn(0f,1f)
         val majorProfile = floatArrayOf(6.35f,2.23f,3.48f,2.33f,4.38f,4.09f,2.52f,5.19f,2.39f,3.66f,2.29f,2.88f)
         val minorProfile = floatArrayOf(6.33f,2.68f,3.52f,5.38f,2.60f,3.53f,2.54f,4.75f,3.98f,2.69f,3.34f,3.17f)
         var major = 0f; var minor = 0f

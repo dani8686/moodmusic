@@ -22,4 +22,10 @@ class ExportNamesTest {
     @Test fun blankNamesHaveSafeFallback() {
         assertEquals("audio", ExportNames.safe("..."))
     }
+
+    @Test fun longNamesKeepPlayableExtension() {
+        val result = ExportNames.safe("a".repeat(180) + ".flac")
+        assertEquals(120, result.length)
+        assertTrue(result.endsWith(".flac"))
+    }
 }

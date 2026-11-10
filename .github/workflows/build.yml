@@ -1,7 +1,6 @@
 name: Test and build Android APKs
 on:
   workflow_dispatch:
-  pull_request:
   push:
     branches: [ main, arena/fa1fad68-moodmusic ]
 permissions:
@@ -28,10 +27,17 @@ jobs:
         run: |
           if ! gradle --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug > /tmp/mood-build.log 2>&1; then
             cat /tmp/mood-build.log
-            printf '::error::%s\n' "$(tail -n 100 /tmp/mood-build.log)"
+            tail -n 100 /tmp/mood-build.log | while IFS= read -r line; do printf '::error::%s\n' "$line"; done
             exit 1
           fi
           cat /tmp/mood-build.log
+      - name: Preserve failed build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failed-build-log-${{ github.run_number }}
+          path: /tmp/mood-build.log
+          if-no-files-found: ignore
       - name: Decode optional production signing key
         env:
           MOOD_KEYSTORE_BASE64: ${{ secrets.MOOD_KEYSTORE_BASE64 }}
