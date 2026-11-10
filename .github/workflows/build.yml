@@ -25,9 +25,11 @@ jobs:
           "$SDKM" 'platforms;android-34' 'build-tools;34.0.0'
       - name: Unit tests, lint and debug APK
         run: |
-          if ! gradle --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug > /tmp/mood-build.log 2>&1; then
+          if ! gradle --no-daemon --console=plain --stacktrace :app:assembleDebug :app:testDebugUnitTest :app:lintDebug > /tmp/mood-build.log 2>&1; then
             cat /tmp/mood-build.log
-            tail -n 100 /tmp/mood-build.log | while IFS= read -r line; do printf '::error::%s\n' "$line"; done
+            find "$HOME/.gradle/daemon" -name '*.log' -type f -exec tail -n 80 {} \; > /tmp/mood-daemon.log 2>/dev/null || true
+            cat /tmp/mood-daemon.log
+            { tail -n 140 /tmp/mood-build.log; tail -n 80 /tmp/mood-daemon.log; } | while IFS= read -r line; do printf '::error::%s\n' "$line"; done
             exit 1
           fi
           cat /tmp/mood-build.log
@@ -36,7 +38,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: failed-build-log-${{ github.run_number }}
-          path: /tmp/mood-build.log
+          path: |
+            /tmp/mood-build.log
+            /tmp/mood-daemon.log
           if-no-files-found: ignore
       - name: Decode optional production signing key
         env:
