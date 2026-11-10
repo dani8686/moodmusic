@@ -70,4 +70,6 @@ dependencies {
     implementation("androidx.media3:media3-session:1.4.1")
     implementation("io.coil-kt:coil-compose:2.6.0")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.12.2")
+    testImplementation("androidx.test:core-ktx:1.6.1")
 }

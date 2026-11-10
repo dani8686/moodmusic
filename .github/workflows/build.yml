@@ -26,7 +26,7 @@ jobs:
           "$SDKM" 'platforms;android-34' 'build-tools;34.0.0'
       - name: Unit tests, lint and debug APK
         run: |
-          if ! ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug > /tmp/mood-build.log 2>&1; then
+          if ! gradle --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug > /tmp/mood-build.log 2>&1; then
             cat /tmp/mood-build.log
             printf '::error::%s\n' "$(tail -n 100 /tmp/mood-build.log)"
             exit 1
@@ -48,7 +48,7 @@ jobs:
           MOOD_KEYSTORE_PASSWORD: ${{ secrets.MOOD_KEYSTORE_PASSWORD }}
           MOOD_KEY_ALIAS: ${{ secrets.MOOD_KEY_ALIAS }}
           MOOD_KEY_PASSWORD: ${{ secrets.MOOD_KEY_PASSWORD }}
-        run: ./gradlew --no-daemon :app:assembleRelease
+        run: gradle --no-daemon :app:assembleRelease
       - name: Validate APK package, signing and privacy permissions
         run: |
           APK=app/build/outputs/apk/release/app-release.apk

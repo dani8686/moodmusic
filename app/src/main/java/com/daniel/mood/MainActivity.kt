@@ -54,7 +54,7 @@ internal fun clock(ms: Long, pd: Boolean): String {
     val seconds = max(0, ms / 1000)
     return digits("${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}", pd)
 }
-private data class NameDialog(val playlistId: Long?, val initial: String = "")
+private data class NameDialog(val playlistId: Long?, val initial: String = "", val addSongId: Long? = null)
 
 class MainActivity : ComponentActivity() {
     private var permissionChanged by mutableIntStateOf(0)
@@ -282,14 +282,16 @@ private fun App(
                         items(playlists, key = { it.id }) { playlist -> TextButton(onClick = {
                             scope.launch { withContext(Dispatchers.IO) { playlistDao.addSong(playlist.id, song.id) } }; playlistPicker = null
                         }, modifier = Modifier.fillMaxWidth()) { Text(playlist.name) } }
-                        item { TextButton(onClick = { playlistPicker = null; nameDialog = NameDialog(null) }) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(8.dp)); Text(tr(fa, "New playlist", "پلی‌لیست جدید")) } }
+                        item { TextButton(onClick = { playlistPicker = null; nameDialog = NameDialog(null, addSongId = song.id) }) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(8.dp)); Text(tr(fa, "New playlist", "پلی‌لیست جدید")) } }
                     } }, confirmButton = { TextButton(onClick = { playlistPicker = null }) { Text(tr(fa, "Cancel", "لغو")) } }
                 ) }
                 nameDialog?.let { dialog -> PlaylistNameDialog(dialog.initial, fa, onDismiss = { nameDialog = null }) { name ->
                     scope.launch {
                         withContext(Dispatchers.IO) {
-                            if (dialog.playlistId == null) playlistDao.create(Playlist(name = name, createdAt = System.currentTimeMillis()))
-                            else playlistDao.rename(dialog.playlistId, name)
+                            if (dialog.playlistId == null) {
+                                val newId = playlistDao.create(Playlist(name = name, createdAt = System.currentTimeMillis()))
+                                dialog.addSongId?.let { playlistDao.addSong(newId, it) }
+                            } else playlistDao.rename(dialog.playlistId, name)
                         }
                     }; nameDialog = null
                 } }
@@ -332,7 +334,7 @@ private fun HomeView(
                 Spacer(Modifier.height(18.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     StatCard(digits(total, pd), tr(fa, "songs", "آهنگ"), Modifier.weight(1f))
-                    StatCard(digits(corrections, pd), tr(fa, "learned corrections", "اصلاح یادگرفته‌شده"), Modifier.weight(1f))
+                    StatCard(digits(corrections, pd), tr(fa, "manual corrections", "اصلاح دستی"), Modifier.weight(1f))
                 }
             }
         }
