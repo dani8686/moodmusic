@@ -617,7 +617,7 @@ private fun ScreenHeader(title: String, icon: ImageVector, modifier: Modifier = 
 }
 
 @Composable
-private fun EmptyView(message: String, icon: ImageVector) {
+internal fun EmptyView(message: String, icon: ImageVector) {
     Column(Modifier.fillMaxWidth().padding(40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(icon, null, modifier = Modifier.size(54.dp), tint = MaterialTheme.colorScheme.primary.copy(alpha = .7f)); Spacer(Modifier.height(12.dp)); Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
