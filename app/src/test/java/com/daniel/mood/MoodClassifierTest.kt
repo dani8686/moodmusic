@@ -30,16 +30,19 @@ class MoodClassifierTest {
     }
 
     @Test fun subjectiveMoodsNeverLookCertain() {
-        val rainy = MoodClassifier.classify(features(), listOf(LearningProfile(Moods.RAINY, 1000, features().learningVector())))
+        val rainyVector = features().learningVector()
+        val rainy = MoodClassifier.classify(features(), listOf(LearningProfile(Moods.RAINY, 1000, FloatArray(rainyVector.size) { rainyVector[it] * 1000f })))
         if (rainy.mood == Moods.RAINY) assertTrue(rainy.confidence < MoodClassifier.REVIEW_THRESHOLD)
-        val nostalgic = MoodClassifier.classify(features(), listOf(LearningProfile(Moods.NOSTALGIC, 1000, features().learningVector())))
+        val nostalgicVector = features().learningVector()
+        val nostalgic = MoodClassifier.classify(features(), listOf(LearningProfile(Moods.NOSTALGIC, 1000, FloatArray(nostalgicVector.size) { nostalgicVector[it] * 1000f })))
         if (nostalgic.mood == Moods.NOSTALGIC) assertTrue(nostalgic.confidence < MoodClassifier.REVIEW_THRESHOLD)
     }
 
     @Test fun learnedCentroidChangesAutomaticClassification() {
         val f = features()
         val baseline = MoodClassifier.classify(f)
-        val learned = MoodClassifier.classify(f, listOf(LearningProfile(Moods.INSTRUMENTAL, 1000, f.learningVector())))
+        val sums = FloatArray(f.learningVector().size) { f.learningVector()[it] * 1000f }
+        val learned = MoodClassifier.classify(f, listOf(LearningProfile(Moods.INSTRUMENTAL, 1000, sums)))
         assertEquals(Moods.INSTRUMENTAL, learned.mood)
         assertTrue(baseline.mood in Moods.all)
     }
