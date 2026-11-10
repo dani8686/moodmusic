@@ -29,7 +29,7 @@ jobs:
             cat /tmp/mood-build.log
             find "$HOME/.gradle/daemon" -name '*.log' -type f -exec tail -n 80 {} \; > /tmp/mood-daemon.log 2>/dev/null || true
             cat /tmp/mood-daemon.log
-            { tail -n 140 /tmp/mood-build.log; tail -n 80 /tmp/mood-daemon.log; } | while IFS= read -r line; do printf '::error::%s\n' "$line"; done
+            { cat /tmp/mood-build.log /tmp/mood-daemon.log; } | grep -E 'What went wrong|Execution failed|Caused by:|^e:|^error:|AAPT|OutOfMemory|Exception|FAILURE|error occurred|Daemon (disappeared|expired)|Could not|error:' | tail -n 10 | while IFS= read -r line; do printf '::error::%s\n' "$line"; done
             exit 1
           fi
           cat /tmp/mood-build.log
