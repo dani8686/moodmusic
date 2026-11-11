@@ -240,7 +240,7 @@ fun RadarScreen(
                     label = { Text(tr(fa, "Artist, track or mood", "هنرمند، آهنگ یا حال‌وهوا")) }, leadingIcon = { Icon(Icons.Default.Search, null) })
                 Row {
                     Button(onClick = {
-                        if (!AiSettings.enabled(context)) { error = tr(fa, "Enable online services first", "ابتدا سرویس آنلاین را فعال کنید"); return@Button }
+                        if (!AiSettings.enabled(context) || !AiSettings.catalogEnabled(context)) { error = tr(fa, "Enable online services and catalog provider first", "ابتدا سرویس آنلاین و Provider کاتالوگ را فعال کنید"); return@Button }
                         scope.launch {
                             loading = true; error = ""
                             OnlineGate(context).check()?.let { error = it; loading = false; return@launch }
