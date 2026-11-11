@@ -754,11 +754,11 @@ private fun SongActionsDialog(
             if (song.manual) append(tr(fa, "Manually corrected by you\n", "توسط شما اصلاح شده\n"))
             append(tr(fa, "Provenance: ${song.analysisSource}\nConfidence: ${(song.confidence*100).toInt()}%\n", "منبع: ${song.analysisSource}\nاطمینان: ${(song.confidence*100).toInt()}%\n"))
             append(tr(fa, "Energy ${(song.energy*100).toInt()}%, tempo ${song.bpm} BPM, brightness ${((Features.vector(song.featureData)?.get(4) ?: 0f)*100).toInt()}%, vocal ${((Features.vector(song.featureData)?.get(9) ?: 0f)*100).toInt()}%\n", "انرژی ${(song.energy*100).toInt()}٪، تمپو ${song.bpm}، روشنایی ${((Features.vector(song.featureData)?.get(4) ?: 0f)*100).toInt()}٪، صدا ${((Features.vector(song.featureData)?.get(9) ?: 0f)*100).toInt()}٪\n"))
-            song.onlineExplanation?.takeIf { it.isNotBlank() }?.let { append("\n$it") }
+            song.onlineExplanation.takeIf { it.isNotBlank() }?.let { append("\n$it") }
             append(tr(fa, "\nAnalysis is probabilistic; your correction takes priority.", "\nتحلیل احتمالی است و اصلاح شما اولویت دارد."))
         }) }, confirmButton = { TextButton(onClick = { showExplain = false }) { Text(tr(fa, "Close", "بستن")) } })
     lyrics?.let { result -> AlertDialog(onDismissRequest = { lyrics = null }, title = { Text(tr(fa, "Lyrics • LRCLIB", "متن آهنگ • LRCLIB")) },
-        text = { LazyColumn { item { Text(result.lyrics.ifBlank { null } ?: tr(fa, "No synchronized/plain lyrics available", "متن معمولی/همگام موجود نیست")) }; item { Text(LRCLIBUrl, style = MaterialTheme.typography.bodySmall) } } },
+        text = { LazyColumn { item { Text(result.lyrics.ifBlank { null } ?: tr(fa, "No synchronized/plain lyrics available", "متن معمولی/همگام موجود نیست")) }; item { Text(result.sourceUrl, style = MaterialTheme.typography.bodySmall) } } },
         confirmButton = { TextButton(onClick = { lyrics = null }) { Text(tr(fa, "Close", "بستن")) } })
     }
 }
