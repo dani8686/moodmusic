@@ -68,6 +68,7 @@ jobs:
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose "$APK"
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump permissions "$APK" | tee /tmp/permissions.txt
           if ! grep -q 'android.permission.INTERNET' /tmp/permissions.txt; then echo '::error::Expected optional online INTERNET permission is missing'; exit 1; fi
+          if ! grep -q 'android.permission.ACCESS_NETWORK_STATE' /tmp/permissions.txt; then echo '::error::Wi-Fi policy requires network-state permission'; exit 1; fi
           if grep -q 'android.permission.RECORD_AUDIO' /tmp/permissions.txt; then echo '::error::Unexpected microphone permission'; exit 1; fi
           sha256sum "$APK" | tee app/build/outputs/apk/release/app-release.apk.sha256
       - name: Publish installable test APK and exact metadata
