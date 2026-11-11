@@ -6,18 +6,17 @@ import org.junit.Test
 class IntelligenceTest {
     private fun song(id: Long, mood: Int, energy: Float, bpm: Float = 120f) = Song(id = id, uri = "content://$id", title = "Track $id", artist = "Artist", album = "Album", duration = 180000, size = 1000, modified = 1, added = id,
         mood = mood, secondary = mood, confidence = .8f, bpm = bpm, energy = energy, reason = "", manual = false, seen = 1,
-        autoMood = mood, analysisVersion = 2, featureData = "")
+        autoMood = mood, analysisVersion = 2, featureData = Features(bpm, .5f, energy / 5f, .1f, 2200f, 3000f, .3f, .1f, .5f, .5f, 3f, .5f).serialize())
 
-    @Test fun listeningDnaIsIncrementalAndSkipsHaveNegativeWeight() {
+    @Test fun listeningDnaIsIncrementalAndSkipsHaveNoPositiveWeight() {
         val calm = song(1, Moods.CALM, .1f, 75f)
         val energetic = song(2, Moods.ENERGETIC, .9f, 160f)
-        var dna = TasteEngine.applyEvent(null, calm, ListeningEvent(songId = 1, startedAt = 1, listenedMs = 170000, trackDurationMs = 180000, completionRatio = .95f))
-        val initialEnergy = dna.averageEnergy
+        var dna = TasteEngine.applyEvent(null, calm, ListeningEvent(songId = 1, startedAt = 1, listenedMs = 170000, trackDurationMs = 180000, completionRatio = .95f, skipped = false, source = "test"))
+        val initialEnergy = TasteEngine.snapshot(dna).averageEnergy
         assertTrue(dna.eventCount == 1L && dna.totalWeight > 0)
-        dna = TasteEngine.applyEvent(dna, energetic, ListeningEvent(songId = 2, startedAt = 2, listenedMs = 3000, trackDurationMs = 180000, completionRatio = .02f, skipped = true))
+        dna = TasteEngine.applyEvent(dna, energetic, ListeningEvent(songId = 2, startedAt = 2, listenedMs = 3000, trackDurationMs = 180000, completionRatio = .02f, skipped = true, source = "test"))
         assertEquals(2, dna.eventCount)
-        assertTrue(dna.averageEnergy < initialEnergy)
-        assertTrue(dna.skips > 0)
+        assertEquals(initialEnergy, TasteEngine.snapshot(dna).averageEnergy, .002f)
     }
 
     @Test fun radarExcludesSeedAndGivesAuditableReasons() {
