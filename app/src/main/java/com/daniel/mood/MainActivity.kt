@@ -664,7 +664,7 @@ private fun SettingsView(
             Text(tr(fa, "All audio stays on this device. Rainy, nostalgic and instrumental labels are estimates and may need review.", "همه صداها روی دستگاه می‌مانند. برچسب‌های بارونی، نوستالژیک و بی‌کلام تخمینی‌اند و ممکن است نیاز به بازبینی داشته باشند."), style = MaterialTheme.typography.bodySmall)
         } }
         item { OutlinedButton(onClick = onBattery, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.BatterySaver, null); Spacer(Modifier.width(8.dp)); Text(tr(fa, "Xiaomi battery & autostart help", "راهنمای باتری و شروع خودکار شیائومی")) } }
-        item { Text(tr(fa, "Mood Music Sorter 2.0\nDeveloper: Danial Mousavi\nOffline • Private • No paid APIs", "مرتب‌ساز موزیک ۲٫۰\nتوسعه‌دهنده: دانیال موسوی\nآفلاین • خصوصی • بدون سرویس پولی"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(12.dp)) }
+        item { Text(tr(fa, "Mood Music Sorter 3.0\nDeveloper: Danial Mousavi\nOffline by default • Optional online providers", "مرتب‌ساز موزیک ۳٫۰\nتوسعه‌دهنده: دانیال موسوی\nآفلاین پیش‌فرض • سرویس آنلاین اختیاری"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(12.dp)) }
     }
 }
 
@@ -673,20 +673,6 @@ private fun SettingsView(
 }
 @Composable private fun SettingsRow(label: String, control: @Composable () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Text(label, modifier = Modifier.weight(1f)); control() }
-}
-
-@Composable
-private fun SongActionsDialog(song: Song, fa: Boolean, onDismiss: () -> Unit, onMood: () -> Unit, onPlaylist: () -> Unit, onQueue: () -> Unit, onRemovePlaylist: (() -> Unit)?, onReanalyze: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss, title = { Text(song.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-        text = { Column {
-            TextButton(onClick = onQueue, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.AddToQueue, null); Spacer(Modifier.width(8.dp)); Text(tr(fa, "Add to play queue", "افزودن به صف پخش")) }
-            TextButton(onClick = onMood, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Mood, null); Spacer(Modifier.width(8.dp)); Text(tr(fa, "Change or restore mood", "تغییر یا بازگردانی حال‌وهوا")) }
-            TextButton(onClick = onPlaylist, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.PlaylistAdd, null); Spacer(Modifier.width(8.dp)); Text(tr(fa, "Add to playlist", "افزودن به پلی‌لیست")) }
-            if (onRemovePlaylist != null) TextButton(onClick = onRemovePlaylist, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.PlaylistRemove, null); Spacer(Modifier.width(8.dp)); Text(tr(fa, "Remove from this playlist", "حذف از این پلی‌لیست")) }
-            TextButton(onClick = onReanalyze, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Refresh, null); Spacer(Modifier.width(8.dp)); Text(tr(fa, "Reanalyze audio", "تحلیل دوباره صوت")) }
-        } }, confirmButton = { TextButton(onClick = onDismiss) { Text(tr(fa, "Close", "بستن")) } }
-    )
 }
 
 @Composable
@@ -741,7 +727,7 @@ private fun SongActionsDialog(
         text = { LazyColumn {
             item { Text(song.artist, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             item { TextButton(onClick = { scope.launch { withContext(Dispatchers.IO) { database.songs().feedback(song.id, 1) }; withContext(Dispatchers.IO) { database.intelligence().putTaste(TasteEngine.applyEvent(database.intelligence().taste(), song,
-                ListeningEvent(songId = song.id, startedAt = System.currentTimeMillis(), listenedMs = song.duration.coerceAtLeast(1), trackDurationMs = song.duration, completionRatio = 1f, interaction = "like"))) } }; onDismiss() }) { Icon(Icons.Default.Favorite, null); Text(tr(fa, "Like", "پسندیدن")) } }
+                ListeningEvent(songId = song.id, startedAt = System.currentTimeMillis(), listenedMs = song.duration.coerceAtLeast(1), trackDurationMs = song.duration, completionRatio = 1f, skipped = false, source = "feedback", interaction = "like"))) } }; onDismiss() }) { Icon(Icons.Default.Favorite, null); Text(tr(fa, "Like", "پسندیدن")) } }
             item { TextButton(onClick = { scope.launch { withContext(Dispatchers.IO) { database.songs().feedback(song.id, -1) } }; onDismiss() }) { Icon(Icons.Default.ThumbDown, null); Text(tr(fa, "Dislike", "نپسندیدن")) } }
             item { TextButton(onClick = onMood) { Icon(Icons.Default.Edit, null); Text(tr(fa, "Correct mood", "اصلاح حال‌وهوا")) } }
             item { TextButton(onClick = { showExplain = true }) { Icon(Icons.Default.Info, null); Text(tr(fa, "Why this classification?", "چرا این دسته‌بندی؟")) } }

@@ -77,6 +77,7 @@ object AiSettings {
     fun mode(context: Context) = prefs(context).getString("aiMode", HYBRID) ?: HYBRID
     fun enabled(context: Context) = mode(context) != OFFLINE
     fun askBeforeUpload(context: Context) = prefs(context).getBoolean("askUpload", true)
+    fun lyricsEnabled(context: Context) = prefs(context).getBoolean("lyricsEnabled", true)
     fun automatic(context: Context) = prefs(context).getBoolean("autoOnline", false)
     fun maxUploadBytes(context: Context) = prefs(context).getInt("maxUploadMb", 15) * 1024L * 1024L
     fun dailyLimit(context: Context) = prefs(context).getInt("dailyLimit", 20)
