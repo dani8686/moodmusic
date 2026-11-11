@@ -8,7 +8,16 @@
 - ارسال صدا فقط با رضایت صریح، سیاست Wi-Fi/حجم/سهمیه، کش و Fallback محلی
 - هیچ کلید مخفی یا هزینه سرویس میزبانی‌شده در APK وجود ندارد
 
-**وضعیت: PARTIAL** — برای نتیجه تأییدشده Build، تست و APK به آخرین اجرای [Actions](../../actions) مراجعه کنید. تست دستگاه فیزیکی Redmi/MIUI، Crossfade شنیداری، OTG/Bluetooth و Providerهای واقعی هنوز باید جداگانه تأیید شود.
+**وضعیت کلی: PARTIAL** — Build و تست خودکار COMPLETE است؛ تست دستگاه فیزیکی Redmi/MIUI، Crossfade شنیداری، OTG/Bluetooth و Providerهای واقعی هنوز PARTIAL و امضای Production/Backend میزبان BLOCKED است.
+
+## APK آزمایشی تأییدشده V3
+
+- [دانلود MoodMusicSorter-3.0-test.apk](https://github.com/dani8686/moodmusic/releases/download/v3.0.0-test/MoodMusicSorter-3.0-test.apk)
+- CI موفق: https://github.com/dani8686/moodmusic/actions/runs/43035039717
+- ۲۰ تست PASS، Lint/Debug/Release و بررسی Package/امضا/مجوزها PASS
+- حجم: `3,290,249` بایت
+- SHA-256: `31623f7897322cbffb5014f9ed0c87e0de8bf4c7c19d00a73925c0672c771f8f`
+- این APK با کلید Debug امضا شده و فقط TEST است؛ نصب روی دستگاه فیزیکی و Migration واقعی V2 کاربر هنوز باید آزمایش شود.
 
 ## ساخت و تست
 
