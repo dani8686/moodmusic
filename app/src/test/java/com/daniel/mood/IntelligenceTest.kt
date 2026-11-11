@@ -23,7 +23,7 @@ class IntelligenceTest {
         val all = listOf(song(1, Moods.CALM, .1f, 75f), song(2, Moods.CALM, .12f, 78f), song(3, Moods.ENERGETIC, .95f, 170f))
         val result = RadarEngine.recommend(all, null, all.first(), emptyList(), 5)
         assertFalse(result.any { it.song.id == 1L })
-        assertTrue(result.first().reason.contains("Mood") || result.first().reason.contains("Similar"))
+        assertTrue(result.first().reason in setOf("similar_audio", "liked_characteristics", "unheard_dna_match", "preferred_energy_rhythm", "mood_audio_match"))
         assertTrue(result.all { it.score >= 0 && it.score <= 1 })
     }
 

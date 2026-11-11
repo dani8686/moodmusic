@@ -91,7 +91,7 @@ object RadarEngine {
                 val familiarity = if (discover) forgotten else (1f - exp(-plays / 3f)) * .08f
                 val moodFit = if (context != null && song.mood == context.mood) .08f else 0f
                 val explicit = song.feedback * .16f
-                val score = (.42f * dnaSimilarity + .38f * contextSimilarity + forgotten + familiarity + moodFit + explicit).coerceIn(-1f, 1.5f)
+                val score = (.42f * dnaSimilarity + .38f * contextSimilarity + forgotten + familiarity + moodFit + explicit).coerceIn(0f, 1f)
                 val reason = when {
                     context != null && contextSimilarity > .78f -> "similar_audio"
                     song.feedback > 0 -> "liked_characteristics"
@@ -178,6 +178,12 @@ object JourneyEngine {
             selected += candidate; used += candidate.id; total += candidate.duration; step++
             // Safety against pathological duration metadata.
             if (step > available.size) break
+        }
+        if (selected.isNotEmpty()) {
+            val first = available.filter { it.mood == config.startMood && it !in selected.drop(1) }.minByOrNull { abs(it.energy - config.energy) }
+            if (first != null) { selected.remove(first); selected.add(0, first) }
+            val last = available.filter { it.mood == config.endMood && it !in selected.dropLast(1) }.minByOrNull { abs(it.energy - config.energy) }
+            if (last != null) { selected.remove(last); selected.add(last) }
         }
         return selected
     }

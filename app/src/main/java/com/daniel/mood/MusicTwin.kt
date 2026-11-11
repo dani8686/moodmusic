@@ -32,7 +32,7 @@ object TwinParser {
     fun parse(input: String, currentSongId: Long?): TwinAction {
         val text = input.trim().lowercase()
         if (text.isBlank()) return TwinAction.Unknown()
-        if (text.contains("حذف تاریخچه") || text.contains("delete history")) return TwinAction.DeleteHistory
+        if (text.contains("حذف تاریخچه") || text.contains("delete history") || text.contains("delete listening history")) return TwinAction.DeleteHistory
         if (text.contains("ریست") && (text.contains("dna") || text.contains("سلایق") || text.contains("سلایق")) || text.contains("reset music dna")) return TwinAction.ResetDna
         if (text.contains("مقایسه") && (text.contains("ماه") || text.contains("month"))) return TwinAction.CompareMonths
         if (text.contains("این ماه") || text.contains("this month")) return TwinAction.ShowHistory("month")
@@ -61,8 +61,9 @@ object TwinParser {
         }
         mood(text)?.let { if (text.contains("پخش") || text.contains("play") || text.contains("پلی") || text.contains("بساز")) return TwinAction.PlayMood(it) }
         if (text.contains("رانندگی شب") || text.contains("night drive")) return TwinAction.StartDj("night")
-        val query = text.removePrefix("جستجو").removePrefix("search").removePrefix("پیدا کن").trim()
-        if (query.isNotBlank()) return TwinAction.Search(query)
+        val explicitSearch = text.startsWith("جستجو") || text.startsWith("search") || text.startsWith("پیدا کن") || text.startsWith("find ")
+        val query = text.removePrefix("جستجو").removePrefix("search").removePrefix("پیدا کن").removePrefix("find ").trim()
+        if (query.isNotBlank() && (explicitSearch || text.contains("آهنگ") || text.contains("موسیقی") || text.contains("song") || text.contains("music"))) return TwinAction.Search(query)
         return TwinAction.Unknown()
     }
 
@@ -77,8 +78,12 @@ object TwinParser {
             "search" -> TwinAction.Search(json.optString("query").takeIf { it.isNotBlank() } ?: return TwinAction.Unknown())
             "similar" -> TwinAction.Similar(currentSongId)
             "discover" -> TwinAction.Discover(json.optBoolean("unheardOnly", true))
-            "start_dj" -> TwinAction.StartDj(json.optString("mode", "party"))
-            "journey" -> TwinAction.Journey(json.optInt("start"), json.optInt("end"), json.optInt("minutes", 45).coerceIn(10, 240))
+            "start_dj" -> TwinAction.StartDj(json.optString("mode", "party").takeIf { it in setOf("party", "chill", "emotional", "workout", "night", "nostalgic", "discovery") } ?: return TwinAction.Unknown())
+            "journey" -> {
+                val start = json.optInt("start"); val end = json.optInt("end")
+                if (start !in Moods.all || end !in Moods.all) TwinAction.Unknown("online_invalid_mood")
+                else TwinAction.Journey(start, end, json.optInt("minutes", 45).coerceIn(10, 240))
+            }
             "history" -> TwinAction.ShowHistory(json.optString("period", "month"))
             "explain_dna" -> TwinAction.ExplainDna
             "compare_months" -> TwinAction.CompareMonths
