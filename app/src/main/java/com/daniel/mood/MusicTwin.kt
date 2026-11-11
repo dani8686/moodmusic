@@ -48,7 +48,7 @@ object TwinParser {
             val minutes = Regex("(\\d{1,3})").find(text)?.groupValues?.get(1)?.toIntOrNull()?.coerceIn(10, 240) ?: 45
             return TwinAction.Journey(start, end, minutes)
         }
-        if (text.contains("دی جی") || text.contains("دیجی") || text.contains("dj")) {
+        if (Regex("(^|\\s)(دی\\s*جی|dj)(?=\\s|$)").containsMatchIn(text)) {
             val mode = when {
                 text.contains("شب") || text.contains("night") -> "night"
                 text.contains("ورزش") || text.contains("workout") -> "workout"
