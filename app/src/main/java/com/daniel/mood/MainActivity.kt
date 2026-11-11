@@ -774,6 +774,7 @@ private fun SongActionsDialog(
     lyrics?.let { result -> AlertDialog(onDismissRequest = { lyrics = null }, title = { Text(tr(fa, "Lyrics • ${result.source}", "متن آهنگ • ${result.source}")) },
         text = { LazyColumn { item { Text(result.text ?: tr(fa, "No synchronized/plain lyrics available", "متن معمولی/همگام موجود نیست")) }; item { Text(result.sourceUrl, style = MaterialTheme.typography.bodySmall) } } },
         confirmButton = { TextButton(onClick = { lyrics = null }) { Text(tr(fa, "Close", "بستن")) } })
+    }
 }
 
 @Composable

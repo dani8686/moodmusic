@@ -190,4 +190,5 @@ fun TwinScreen(
         text = { Text(tr(fa, "This action deletes local learned/history data. Continue?", "این عمل داده محلی یادگیری/تاریخچه را حذف می‌کند. ادامه می‌دهید؟")) },
         confirmButton = { TextButton(onClick = { pendingDestructive = null; scope.launch { execute(action) } }) { Text(tr(fa, "Confirm", "تأیید")) } },
         dismissButton = { TextButton(onClick = { pendingDestructive = null }) { Text(tr(fa, "Cancel", "لغو")) } })
+    }
 }
