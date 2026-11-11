@@ -44,6 +44,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
 import kotlin.math.max
 
 internal fun tr(fa: Boolean, en: String, persian: String) = if (fa) persian else en
@@ -113,7 +114,7 @@ private fun App(
     var persianDigits by remember { mutableStateOf(prefs.getBoolean("digits", true)) }
     var dark by remember { mutableStateOf(prefs.getBoolean("dark", true)) }
     val pd = fa && persianDigits
-    var screen by remember { mutableStateOf("home") }
+    var screen by remember { mutableStateOf("dashboard") }
     var category by remember { mutableIntStateOf(-1) }
     var openPlaylist by remember { mutableLongStateOf(-1L) }
     var correction by remember { mutableStateOf<Song?>(null) }
@@ -124,10 +125,14 @@ private fun App(
     var playerOpen by remember { mutableStateOf(false) }
     var playerRevision by remember { mutableIntStateOf(0) }
     var showExportResult by remember { mutableStateOf(false) }
+    var onlineRequest by remember { mutableStateOf<Song?>(null) }
+    var onlineBusy by remember { mutableStateOf(false) }
+    var lyricsResult by remember { mutableStateOf<LyricsResult?>(null) }
     val scope = rememberCoroutineScope()
     val database = remember { MoodDatabase.get(context) }
     val dao = remember { database.songs() }
     val playlistDao = remember { database.playlists() }
+    val intelligence = remember { database.intelligence() }
     val progress by ScanState.progress.collectAsState()
     val export by ExportState.progress.collectAsState()
     val counts by dao.counts().collectAsState(initial = emptyList())
@@ -162,15 +167,81 @@ private fun App(
             if (action == null) ContextCompat.startForegroundService(context, intent) else context.startService(intent)
         } catch (e: Exception) { ScanState.update { it.copy(error = e.message ?: "service") } }
     }
-    fun play(songs: List<Song>, first: Int = 0, shuffle: Boolean = false) {
+    fun play(songs: List<Song>, first: Int = 0, shuffle: Boolean = false, source: String = "library") {
         val c = controller ?: return
-        val tracks = songs.map { it.toMediaItem() }
+        val tracks = songs.map { it.toPlaybackItem(source) }
         if (tracks.isNotEmpty()) {
             c.setMediaItems(tracks, first.coerceIn(0, tracks.lastIndex), 0)
             c.shuffleModeEnabled = shuffle
             c.prepare(); c.play()
         }
     }
+    suspend fun recordTasteFeedback(song: Song, interaction: String) {
+        val event = ListeningEvent(songId = song.id, startedAt = System.currentTimeMillis(), listenedMs = 180000,
+            trackDurationMs = song.duration, completionRatio = 1f, skipped = false, source = "feedback", interaction = interaction)
+        intelligence.putTaste(TasteEngine.applyEvent(intelligence.taste(), song, event))
+    }
+    suspend fun handleTwin(action: TwinAction): String = withContext(Dispatchers.IO) {
+        when (action) {
+            is TwinAction.PlayMood -> {
+                val list = dao.playlist(action.mood)
+                withContext(Dispatchers.Main) { play(list) }
+                tr(fa, "Playing ${list.size} ${Moods.name(action.mood, false)} songs", "${list.size} آهنگ ${Moods.name(action.mood, true)} پخش شد")
+            }
+            is TwinAction.Search -> {
+                val list = dao.page(-1, action.query, 0, 20, 0).first()
+                list.forEach { withContext(Dispatchers.Main) { controller?.addMediaItem(it.toPlaybackItem("twin")) } }
+                tr(fa, "${list.size} matching songs added to queue", "${list.size} آهنگ نتیجه به صف اضافه شد")
+            }
+            is TwinAction.Similar -> {
+                val current = action.songId?.let { dao.get(it) }
+                val result = RadarEngine.recommend(dao.playlist(-1), intelligence.taste(), current, intelligence.recentEvents(500), 8)
+                result.forEach { withContext(Dispatchers.Main) { controller?.addMediaItem(it.song.toPlaybackItem("twin")) } }
+                if (result.isEmpty()) tr(fa, "No analyzed similar songs found", "آهنگ مشابه تحلیل‌شده‌ای یافت نشد")
+                else tr(fa, "${result.size} similar songs added: ${recommendationReason(result.first().reason, false)}", "${result.size} آهنگ مشابه اضافه شد: ${recommendationReason(result.first().reason, true)}")
+            }
+            is TwinAction.Discover -> {
+                val events = intelligence.recentEvents(1000)
+                var result = RadarEngine.recommend(dao.playlist(-1), intelligence.taste(), null, events, 12, discover = true)
+                if (action.unheardOnly) result = result.filter { scored -> events.none { it.songId == scored.song.id } }
+                val id = playlistDao.create(Playlist(name = "Twin Discovery ${System.currentTimeMillis()}", createdAt = System.currentTimeMillis()))
+                result.forEach { playlistDao.addSong(id, it.song.id) }
+                tr(fa, "Created a playlist with ${result.size} discoveries", "پلی‌لیستی با ${result.size} آهنگ کشف‌شده ساخته شد")
+            }
+            is TwinAction.StartDj -> {
+                prefs.edit().putBoolean("djEnabled", true).putString("djMode", action.mode).apply()
+                val result = RadarEngine.recommend(dao.playlist(-1), intelligence.taste(), null, intelligence.recentEvents(500), 30)
+                withContext(Dispatchers.Main) { play(result.map { it.song }, source = "smart_dj") }
+                tr(fa, "Smart DJ started in ${action.mode} mode", "دی‌جِی در حالت ${action.mode} شروع شد")
+            }
+            is TwinAction.Journey -> {
+                val config = JourneyConfig(action.start, action.end, action.minutes, .65f, .6f)
+                val list = JourneyEngine.generate(dao.playlist(-1), intelligence.taste(), config)
+                intelligence.addJourney(MoodJourney(name = "Twin Journey", startingMood = action.start, targetMood = action.end,
+                    requestedMinutes = action.minutes, energy = .65f, familiarity = .6f,
+                    songIds = list.joinToString(",") { it.id.toString() }, generatedAt = System.currentTimeMillis()))
+                withContext(Dispatchers.Main) { play(list, source = "journey") }
+                tr(fa, "Generated and saved a ${action.minutes}-minute journey with ${list.size} songs", "سفر ${action.minutes} دقیقه‌ای با ${list.size} آهنگ ساخته و ذخیره شد")
+            }
+            is TwinAction.ShowHistory -> { withContext(Dispatchers.Main) { screen = "time" }; tr(fa, "Opening your real listening history", "تاریخچه واقعی شنیدن باز شد") }
+            TwinAction.ExplainDna -> {
+                val dna = TasteEngine.snapshot(intelligence.taste())
+                if (dna.totalWeight <= 0) tr(fa, "Not enough listening data yet", "هنوز داده کافی برای DNA وجود ندارد")
+                else tr(fa, "Preferred energy ${(dna.averageEnergy*100).toInt()}%, tempo ${dna.averageTempo.toInt()} BPM, vocal preference ${(dna.vocalPreference*100).toInt()}% from ${dna.eventCount} recorded sessions.",
+                    "انرژی ترجیحی ${(dna.averageEnergy*100).toInt()}٪، تمپو ${dna.averageTempo.toInt()} BPM و علاقه به صدا ${(dna.vocalPreference*100).toInt()}٪ از ${dna.eventCount} جلسه واقعی.")
+            }
+            TwinAction.CompareMonths -> {
+                val current = TimeRanges.thisMonth(); val previous = TimeRanges.lastMonth()
+                val a = intelligence.period(current.first, current.second); val b = intelligence.period(previous.first, previous.second)
+                tr(fa, "This month ${a.listenedMs/60000} min / ${a.events} sessions; last month ${b.listenedMs/60000} min / ${b.events}.",
+                    "این ماه ${a.listenedMs/60000} دقیقه و ${a.events} جلسه؛ ماه قبل ${b.listenedMs/60000} دقیقه و ${b.events} جلسه.")
+            }
+            TwinAction.ResetDna -> { intelligence.resetTaste(); tr(fa, "Music DNA was reset after confirmation", "DNA پس از تأیید بازنشانی شد") }
+            TwinAction.DeleteHistory -> { intelligence.clearHistory(); tr(fa, "Listening history was deleted after confirmation", "تاریخچه پس از تأیید حذف شد") }
+            is TwinAction.Unknown -> tr(fa, "I could not map that request to a safe music action", "این درخواست به یک عمل امن موسیقی تبدیل نشد")
+        }
+    }
+
     fun share(categoryId: Int) {
         scope.launch {
             val all = withContext(Dispatchers.IO) { dao.playlist(categoryId) }
@@ -197,16 +268,38 @@ private fun App(
                         Column {
                             MiniPlayer(controller, playerRevision, fa, pd) { playerOpen = true }
                             NavigationBar(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = .96f)) {
-                                NavigationBarItem(selected = screen == "home" || screen == "songs", onClick = { screen = "home" }, icon = { Icon(Icons.Default.Home, null) }, label = { Text(tr(fa, "Moods", "حال‌وهوا")) })
-                                NavigationBarItem(selected = screen == "playlists" || screen == "playlist", onClick = { screen = "playlists" }, icon = { Icon(Icons.Default.LibraryMusic, null) }, label = { Text(tr(fa, "Playlists", "پلی‌لیست")) })
-                                NavigationBarItem(selected = screen == "queue", onClick = { screen = "queue" }, icon = { Icon(Icons.Default.QueueMusic, null) }, label = { Text(tr(fa, "Queue", "صف")) })
-                                NavigationBarItem(selected = screen == "settings", onClick = { screen = "settings" }, icon = { Icon(Icons.Default.Settings, null) }, label = { Text(tr(fa, "Settings", "تنظیمات")) })
+                                NavigationBarItem(selected = screen == "dashboard", onClick = { screen = "dashboard" }, icon = { Icon(Icons.Default.Home, null) }, label = { Text(tr(fa, "Home", "خانه")) })
+                                NavigationBarItem(selected = screen == "home" || screen == "songs", onClick = { screen = "home" }, icon = { Icon(Icons.Default.LibraryMusic, null) }, label = { Text(tr(fa, "Library", "کتابخانه")) })
+                                NavigationBarItem(selected = screen == "radar", onClick = { screen = "radar" }, icon = { Icon(Icons.Default.TravelExplore, null) }, label = { Text(tr(fa, "Discover", "کشف")) })
+                                NavigationBarItem(selected = screen == "twin", onClick = { screen = "twin" }, icon = { Icon(Icons.Default.SmartToy, null) }, label = { Text("Twin") })
+                                NavigationBarItem(selected = screen in listOf("profile", "settings", "aiSettings", "dna", "time"), onClick = { screen = "profile" }, icon = { Icon(Icons.Default.Person, null) }, label = { Text(tr(fa, "Profile", "پروفایل")) })
                             }
                         }
                     }
                 ) { padding ->
                     Crossfade(targetState = screen, modifier = Modifier.fillMaxSize().padding(padding), label = "screen") { current ->
                         when (current) {
+                            "dashboard" -> DashboardScreen(dao, intelligence, fa, pd,
+                                onLibrary = { screen = "home" }, onDna = { screen = "dna" }, onJourney = { screen = "journey" },
+                                onDj = { screen = "dj" }, onRadar = { screen = "radar" }, onHistory = { screen = "time" },
+                                onPlaylists = { screen = "playlists" }, onQueue = { screen = "queue" },
+                                onPlay = { list, index -> play(list, index, source = "recent") })
+                            "dna" -> MusicDnaScreen(intelligence, dao, fa, pd, onReset = { scope.launch(Dispatchers.IO) { intelligence.resetTaste() } })
+                            "radar" -> RadarScreen(dao, intelligence, controller?.currentMediaItem?.mediaId?.toLongOrNull(), fa, pd,
+                                onPlay = { list, index -> play(list, index, source = "radar") })
+                            "journey" -> JourneyScreen(dao, intelligence, fa, pd, onPlay = { list, source -> play(list, source = source) })
+                            "dj" -> SmartDjScreen(fa, onStart = { mode ->
+                                scope.launch {
+                                    val result = withContext(Dispatchers.IO) { RadarEngine.recommend(dao.playlist(-1), intelligence.taste(), null, intelligence.recentEvents(500), 40) }
+                                    play(result.map { it.song }, source = "smart_dj")
+                                }
+                            })
+                            "time" -> TimeMachineScreen(dao, intelligence, playlistDao, fa, pd, onPlay = { list, source -> play(list, source = source) })
+                            "twin" -> TwinScreen(intelligence, controller?.currentMediaItem?.mediaId?.toLongOrNull(), fa, onAction = { action -> handleTwin(action) })
+                            "profile" -> ProfileScreen(fa, onDna = { screen = "dna" }, onHistory = { screen = "time" },
+                                onAiSettings = { screen = "aiSettings" }, onSettings = { screen = "settings" },
+                                onPlaylists = { screen = "playlists" }, onQueue = { screen = "queue" })
+                            "aiSettings" -> AiSettingsScreen(dao, intelligence, fa)
                             "home" -> HomeView(
                                 fa, pd, permission, total, counts, correctionCount, progress,
                                 onRequest = onRequest, onScan = { scan() }, onPause = { scan(if (progress.paused) "resume" else "pause") }, onCancel = { scan("cancel") },
@@ -311,11 +404,7 @@ private fun App(
     }
 }
 
-private fun Song.toMediaItem(): MediaItem {
-    val metadata = MediaMetadata.Builder().setTitle(title).setArtist(artist).setAlbumTitle(album)
-    albumArtwork(albumId)?.let { metadata.setArtworkUri(it) }
-    return MediaItem.Builder().setMediaId(id.toString()).setUri(uri).setMediaMetadata(metadata.build()).build()
-}
+private fun Song.toMediaItem(): MediaItem = toPlaybackItem("library")
 
 @Composable
 private fun HomeView(
@@ -418,6 +507,10 @@ private fun SongsView(
     var offset by remember(category) { mutableIntStateOf(0) }
     val songs by remember(category, query, sort, offset) { dao.page(category, query, sort, 100, offset) }.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val database = remember { MoodDatabase.get(context) }
+    var showAllAi by remember { mutableStateOf(false) }
+    var onlineStatus by remember { mutableStateOf("") }
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, tr(fa, "Back", "بازگشت")) }
@@ -429,6 +522,7 @@ private fun SongsView(
             leadingIcon = { Icon(Icons.Default.Search, null) }, placeholder = { Text(tr(fa, "Search title or artist", "جستجوی آهنگ یا خواننده")) }, shape = RoundedCornerShape(18.dp)
         )
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.horizontalScroll(rememberScrollState())) {
+            TextButton(onClick = { showAllAi = true }) { Icon(Icons.Default.AutoAwesome, null); Text(tr(fa, "Analyze visible", "تحلیل این صفحه")) }
             TextButton(onClick = { sort = (sort + 1) % 5; offset = 0 }) {
                 Icon(Icons.Default.SwapVert, null); Spacer(Modifier.width(4.dp))
                 Text(listOf(tr(fa, "Title", "نام"), tr(fa, "Artist", "خواننده"), tr(fa, "Recent", "جدید"), "BPM", tr(fa, "Energy", "انرژی"))[sort])
@@ -439,9 +533,10 @@ private fun SongsView(
                 IconButton(onClick = onShare) { Icon(Icons.Default.Share, tr(fa, "Share", "اشتراک")) }
             }
         }
+        if (onlineStatus.isNotBlank()) Text(onlineStatus, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(4.dp))
         if (songs.isEmpty()) EmptyView(tr(fa, "No songs found", "آهنگی یافت نشد"), Icons.Default.MusicNote)
         else LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
-            items(songs, key = { it.id }) { song -> SongRow(song, fa, pd, onClick = { onPlay(songs, songs.indexOf(song), false) }, onMenu = { onMenu(song) }) }
+            items(songs, key = { it.id }) { song -> SongRow(song, fa, pd, onClick = { onPlay(songs, songs.indexOf(song), false) }, onMenu = { onMenu(song) }, onFeedback = { feedback -> scope.launch { withContext(Dispatchers.IO) { dao.feedback(song.id, feedback) } } }) }
         }
         if (offset > 0 || songs.size == 100) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             TextButton(enabled = offset > 0, onClick = { offset = max(0, offset - 100) }) { Text(tr(fa, "Previous", "قبلی")) }
@@ -449,10 +544,25 @@ private fun SongsView(
             TextButton(enabled = songs.size == 100, onClick = { offset += 100 }) { Text(tr(fa, "Next", "بعدی")) }
         }
     }
+    if (showAllAi) AlertDialog(onDismissRequest = { showAllAi = false }, title = { Text(tr(fa, "Upload visible songs?", "آهنگ‌های این صفحه آپلود شوند؟")) },
+        text = { Text(tr(fa, "Each audio file is sent to your configured AI only with consent, Wi-Fi/size limits and a maximum of ${songs.size} files. Your manual corrections remain unchanged. Local analysis stays available.", "هر فایل صوتی فقط با رضایت، محدودیت Wi-Fi/حجم و حداکثر ${songs.size} فایل به AI شما ارسال می‌شود. اصلاح دستی حفظ می‌شود و تحلیل محلی باقی می‌ماند.")) },
+        confirmButton = { TextButton(onClick = {
+            showAllAi = false
+            scope.launch {
+                var done = 0; var failed = 0
+                songs.forEach { song ->
+                    try {
+                        val result = withContext(Dispatchers.IO) { OnlineAnalysisCoordinator(context, dao, database.intelligence()).analyze(song, true) }
+                        if (result != null) done++ else failed++
+                    } catch (e: Exception) { failed++; onlineStatus = e.message ?: "AI error" }
+                }
+                onlineStatus = tr(fa, "Online success: $done • failed/skipped: $failed", "موفق آنلاین: $done • ناموفق/رد: $failed")
+            }
+        }) { Text(tr(fa, "Consent and upload", "رضایت و آپلود")) } }, dismissButton = { TextButton(onClick = { showAllAi = false }) { Text(tr(fa, "Cancel", "لغو")) } })
 }
 
 @Composable
-private fun SongRow(song: Song, fa: Boolean, pd: Boolean, onClick: () -> Unit, onMenu: () -> Unit) {
+private fun SongRow(song: Song, fa: Boolean, pd: Boolean, onClick: () -> Unit, onMenu: () -> Unit, onFeedback: ((String) -> Unit)? = null) {
     ElevatedCard(onClick = onClick, modifier = Modifier.fillMaxWidth(), colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .86f))) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Artwork(albumArtwork(song.albumId), Modifier.size(58.dp), Moods.symbols.getOrElse(song.mood) { "♫" })
@@ -468,7 +578,13 @@ private fun SongRow(song: Song, fa: Boolean, pd: Boolean, onClick: () -> Unit, o
                 }
                 if (song.reason.isNotBlank()) Text(tr(fa, "Audio could not be decoded", "فایل صوتی قابل تحلیل نیست"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
             }
-            IconButton(onClick = onMenu) { Icon(Icons.Default.MoreVert, tr(fa, "Song actions", "عملیات آهنگ")) }
+            Column {
+                if (onFeedback != null) Row {
+                    IconButton(onClick = { onFeedback("like") }) { Icon(Icons.Default.Favorite, tr(fa, "Like", "پسندیدن"), tint = if (song.feedback == "like") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp)) }
+                    IconButton(onClick = { onFeedback("dislike") }) { Icon(Icons.Default.ThumbDown, tr(fa, "Dislike", "نپسندیدن"), tint = if (song.feedback == "dislike") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp)) }
+                }
+                IconButton(onClick = onMenu) { Icon(Icons.Default.MoreVert, tr(fa, "Song actions", "عملیات آهنگ")) }
+            }
         }
     }
 }
@@ -607,6 +723,57 @@ private fun ExportRunningCard(export: ExportProgress, fa: Boolean, pd: Boolean, 
             TextButton(onClick = onCancel) { Text(tr(fa, "Cancel export", "لغو خروجی")) }
         }
     }
+}
+
+@Composable
+private fun SongActionsDialog(
+    song: Song, fa: Boolean, onDismiss: () -> Unit, onMood: () -> Unit,
+    onPlaylist: () -> Unit, onQueue: () -> Unit, onRemovePlaylist: (() -> Unit)?, onReanalyze: () -> Unit
+) {
+    val context = LocalContext.current
+    val database = remember { MoodDatabase.get(context) }
+    val scope = rememberCoroutineScope()
+    var showExplain by remember { mutableStateOf(false) }
+    var lyrics by remember { mutableStateOf<LyricsResult?>(null) }
+    var lyricsBusy by remember { mutableStateOf(false) }
+    var lyricsError by remember { mutableStateOf("") }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(song.title, maxLines = 2) },
+        text = { LazyColumn {
+            item { Text(song.artist, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            item { TextButton(onClick = { scope.launch { withContext(Dispatchers.IO) { database.songs().feedback(song.id, "like") }; withContext(Dispatchers.IO) { database.intelligence().putTaste(TasteEngine.applyEvent(database.intelligence().taste(), song,
+                ListeningEvent(songId = song.id, startedAt = System.currentTimeMillis(), listenedMs = song.duration.coerceAtLeast(1), trackDurationMs = song.duration, completionRatio = 1f, interaction = "like"))) } }; onDismiss() }) { Icon(Icons.Default.Favorite, null); Text(tr(fa, "Like", "پسندیدن")) } }
+            item { TextButton(onClick = { scope.launch { withContext(Dispatchers.IO) { database.songs().feedback(song.id, "dislike") } }; onDismiss() }) { Icon(Icons.Default.ThumbDown, null); Text(tr(fa, "Dislike", "نپسندیدن")) } }
+            item { TextButton(onClick = onMood) { Icon(Icons.Default.Edit, null); Text(tr(fa, "Correct mood", "اصلاح حال‌وهوا")) } }
+            item { TextButton(onClick = { showExplain = true }) { Icon(Icons.Default.Info, null); Text(tr(fa, "Why this classification?", "چرا این دسته‌بندی؟")) } }
+            item { TextButton(onClick = onPlaylist) { Icon(Icons.Default.PlaylistAdd, null); Text(tr(fa, "Add to playlist", "افزودن به پلی‌لیست")) } }
+            item { TextButton(onClick = onQueue) { Icon(Icons.Default.QueueMusic, null); Text(tr(fa, "Add to queue", "افزودن به صف")) } }
+            item { TextButton(onClick = onReanalyze) { Icon(Icons.Default.Refresh, null); Text(tr(fa, "Reanalyze locally", "تحلیل دوباره آفلاین")) } }
+            if (AiSettings.lyricsEnabled(context)) item { TextButton(onClick = {
+                scope.launch {
+                    lyricsBusy = true; lyricsError = ""
+                    OnlineGate(context).check()?.let { lyricsError = it; lyricsBusy = false; return@launch }
+                    try {
+                        OnlineGate(context).record()
+                        lyrics = withContext(Dispatchers.IO) { ProviderRegistry(context).lyrics.fetch(song.artist, song.title, song.duration / 1000) }
+                    } catch (e: Exception) { lyricsError = e.message ?: "Lyrics error" }
+                    lyricsBusy = false
+                }
+            }) { Icon(Icons.Default.Lyrics, null); Text(tr(fa, "Get online lyrics (consent required)", "دریافت متن آنلاین (با رضایت)")) } }
+            if (lyricsBusy) item { LoadingLine() }
+            if (lyricsError.isNotBlank()) item { Text(lyricsError, color = MaterialTheme.colorScheme.error) }
+            onRemovePlaylist?.let { item { TextButton(onClick = it) { Icon(Icons.Default.RemoveCircle, null); Text(tr(fa, "Remove from playlist", "حذف از پلی‌لیست")) } } }
+        } }, confirmButton = { TextButton(onClick = onDismiss) { Text(tr(fa, "Close", "بستن")) } })
+    if (showExplain) AlertDialog(onDismissRequest = { showExplain = false }, title = { Text(Moods.name(song.mood, fa)) },
+        text = { Text(buildString {
+            if (song.manual) append(tr(fa, "Manually corrected by you\n", "توسط شما اصلاح شده\n"))
+            append(tr(fa, "Provenance: ${song.analysisSource}\nConfidence: ${(song.analysisConfidence*100).toInt()}%\n", "منبع: ${song.analysisSource}\nاطمینان: ${(song.analysisConfidence*100).toInt()}%\n"))
+            append(tr(fa, "Energy ${(song.energy*100).toInt()}%, tempo ${song.bpm} BPM, brightness ${(song.brightness*100).toInt()}%, vocal ${(song.vocal*100).toInt()}%\n", "انرژی ${(song.energy*100).toInt()}٪، تمپو ${song.bpm}، روشنایی ${(song.brightness*100).toInt()}٪، صدا ${(song.vocal*100).toInt()}٪\n"))
+            song.onlineExplanation?.takeIf { it.isNotBlank() }?.let { append("\n$it") }
+            append(tr(fa, "\nAnalysis is probabilistic; your correction takes priority.", "\nتحلیل احتمالی است و اصلاح شما اولویت دارد."))
+        }) }, confirmButton = { TextButton(onClick = { showExplain = false }) { Text(tr(fa, "Close", "بستن")) } })
+    lyrics?.let { result -> AlertDialog(onDismissRequest = { lyrics = null }, title = { Text(tr(fa, "Lyrics • ${result.source}", "متن آهنگ • ${result.source}")) },
+        text = { LazyColumn { item { Text(result.text ?: tr(fa, "No synchronized/plain lyrics available", "متن معمولی/همگام موجود نیست")) }; item { Text(result.sourceUrl, style = MaterialTheme.typography.bodySmall) } } },
+        confirmButton = { TextButton(onClick = { lyrics = null }) { Text(tr(fa, "Close", "بستن")) } })
 }
 
 @Composable

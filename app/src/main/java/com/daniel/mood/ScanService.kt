@@ -99,7 +99,7 @@ class ScanService : Service() {
                     while (ScanState.paused) { delay(250); ensureActive() }
                     ScanState.update { it.copy(current = input.title) }
                     val existing = dao.get(input.id)
-                    val song = try {
+                    var song = try {
                         val r = AudioAnalysis.analyze(applicationContext, Uri.parse(input.uri), input.duration, accurate, profiles)
                         Song(
                             input.id, input.uri, input.title, input.artist, input.album, input.duration,
@@ -108,6 +108,9 @@ class ScanService : Service() {
                             r.secondary, r.confidence, r.features.bpm, r.features.rms, "",
                             existing?.manual == true, generation, r.mood, input.albumId,
                             r.features.serialize(), 2
+                        ).copy(
+                            feedback = existing?.feedback ?: 0, analysisSource = "local",
+                            localMood = r.mood, localConfidence = r.confidence, onlineExplanation = ""
                         )
                     } catch (e: CancellationException) { throw e }
                     catch (e: Exception) {
@@ -120,7 +123,15 @@ class ScanService : Service() {
                             if (existing?.manual == true) existing.mood else Moods.UNSORTED,
                             Moods.UNSORTED, 0f, 0f, 0f, reason, existing?.manual == true,
                             generation, Moods.UNSORTED, input.albumId, "", 2
-                        )
+                        ).copy(feedback = existing?.feedback ?: 0, localMood = Moods.UNSORTED, localConfidence = 0f)
+                    }
+                    val automaticOnline = AiSettings.enabled(applicationContext) && AiSettings.automatic(applicationContext) &&
+                        !AiSettings.askBeforeUpload(applicationContext) && ProviderRegistry(applicationContext).configured()
+                    val needsOnline = AiSettings.mode(applicationContext) == AiSettings.ONLINE ||
+                        (AiSettings.mode(applicationContext) == AiSettings.HYBRID && song.confidence < MoodClassifier.REVIEW_THRESHOLD)
+                    if (automaticOnline && needsOnline && song.reason.isBlank()) {
+                        try { song = OnlineAnalysisCoordinator(applicationContext).analyze(song, confirmed = true) }
+                        catch (_: Exception) { /* Local result remains a complete offline fallback. */ }
                     }
                     dao.put(song)
                     val count = finished.incrementAndGet()
