@@ -552,7 +552,7 @@ private fun SongsView(
                 var done = 0; var failed = 0
                 songs.forEach { song ->
                     try {
-                        val result = withContext(Dispatchers.IO) { OnlineAnalysisCoordinator(context, dao, database.intelligence()).analyze(song, true) }
+                        val result = withContext(Dispatchers.IO) { OnlineAnalysisCoordinator(context).analyze(song, true) }
                         if (result != null) done++ else failed++
                     } catch (e: Exception) { failed++; onlineStatus = e.message ?: "AI error" }
                 }
@@ -562,7 +562,7 @@ private fun SongsView(
 }
 
 @Composable
-private fun SongRow(song: Song, fa: Boolean, pd: Boolean, onClick: () -> Unit, onMenu: () -> Unit, onFeedback: ((String) -> Unit)? = null) {
+private fun SongRow(song: Song, fa: Boolean, pd: Boolean, onClick: () -> Unit, onMenu: () -> Unit, onFeedback: ((Int) -> Unit)? = null) {
     ElevatedCard(onClick = onClick, modifier = Modifier.fillMaxWidth(), colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .86f))) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Artwork(albumArtwork(song.albumId), Modifier.size(58.dp), Moods.symbols.getOrElse(song.mood) { "♫" })
@@ -580,8 +580,8 @@ private fun SongRow(song: Song, fa: Boolean, pd: Boolean, onClick: () -> Unit, o
             }
             Column {
                 if (onFeedback != null) Row {
-                    IconButton(onClick = { onFeedback("like") }) { Icon(Icons.Default.Favorite, tr(fa, "Like", "پسندیدن"), tint = if (song.feedback == "like") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp)) }
-                    IconButton(onClick = { onFeedback("dislike") }) { Icon(Icons.Default.ThumbDown, tr(fa, "Dislike", "نپسندیدن"), tint = if (song.feedback == "dislike") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp)) }
+                    IconButton(onClick = { onFeedback(1) }) { Icon(Icons.Default.Favorite, tr(fa, "Like", "پسندیدن"), tint = if (song.feedback == 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp)) }
+                    IconButton(onClick = { onFeedback(-1) }) { Icon(Icons.Default.ThumbDown, tr(fa, "Dislike", "نپسندیدن"), tint = if (song.feedback == -1) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp)) }
                 }
                 IconButton(onClick = onMenu) { Icon(Icons.Default.MoreVert, tr(fa, "Song actions", "عملیات آهنگ")) }
             }
@@ -740,9 +740,9 @@ private fun SongActionsDialog(
     AlertDialog(onDismissRequest = onDismiss, title = { Text(song.title, maxLines = 2) },
         text = { LazyColumn {
             item { Text(song.artist, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            item { TextButton(onClick = { scope.launch { withContext(Dispatchers.IO) { database.songs().feedback(song.id, "like") }; withContext(Dispatchers.IO) { database.intelligence().putTaste(TasteEngine.applyEvent(database.intelligence().taste(), song,
+            item { TextButton(onClick = { scope.launch { withContext(Dispatchers.IO) { database.songs().feedback(song.id, 1) }; withContext(Dispatchers.IO) { database.intelligence().putTaste(TasteEngine.applyEvent(database.intelligence().taste(), song,
                 ListeningEvent(songId = song.id, startedAt = System.currentTimeMillis(), listenedMs = song.duration.coerceAtLeast(1), trackDurationMs = song.duration, completionRatio = 1f, interaction = "like"))) } }; onDismiss() }) { Icon(Icons.Default.Favorite, null); Text(tr(fa, "Like", "پسندیدن")) } }
-            item { TextButton(onClick = { scope.launch { withContext(Dispatchers.IO) { database.songs().feedback(song.id, "dislike") } }; onDismiss() }) { Icon(Icons.Default.ThumbDown, null); Text(tr(fa, "Dislike", "نپسندیدن")) } }
+            item { TextButton(onClick = { scope.launch { withContext(Dispatchers.IO) { database.songs().feedback(song.id, -1) } }; onDismiss() }) { Icon(Icons.Default.ThumbDown, null); Text(tr(fa, "Dislike", "نپسندیدن")) } }
             item { TextButton(onClick = onMood) { Icon(Icons.Default.Edit, null); Text(tr(fa, "Correct mood", "اصلاح حال‌وهوا")) } }
             item { TextButton(onClick = { showExplain = true }) { Icon(Icons.Default.Info, null); Text(tr(fa, "Why this classification?", "چرا این دسته‌بندی؟")) } }
             item { TextButton(onClick = onPlaylist) { Icon(Icons.Default.PlaylistAdd, null); Text(tr(fa, "Add to playlist", "افزودن به پلی‌لیست")) } }
@@ -754,7 +754,7 @@ private fun SongActionsDialog(
                     OnlineGate(context).check()?.let { lyricsError = it; lyricsBusy = false; return@launch }
                     try {
                         OnlineGate(context).record()
-                        lyrics = withContext(Dispatchers.IO) { ProviderRegistry(context).lyrics.fetch(song.artist, song.title, song.duration / 1000) }
+                        lyrics = withContext(Dispatchers.IO) { ProviderRegistry(context).lyrics.lyrics(song.title, song.artist) }
                     } catch (e: Exception) { lyricsError = e.message ?: "Lyrics error" }
                     lyricsBusy = false
                 }
@@ -766,12 +766,12 @@ private fun SongActionsDialog(
     if (showExplain) AlertDialog(onDismissRequest = { showExplain = false }, title = { Text(Moods.name(song.mood, fa)) },
         text = { Text(buildString {
             if (song.manual) append(tr(fa, "Manually corrected by you\n", "توسط شما اصلاح شده\n"))
-            append(tr(fa, "Provenance: ${song.analysisSource}\nConfidence: ${(song.analysisConfidence*100).toInt()}%\n", "منبع: ${song.analysisSource}\nاطمینان: ${(song.analysisConfidence*100).toInt()}%\n"))
-            append(tr(fa, "Energy ${(song.energy*100).toInt()}%, tempo ${song.bpm} BPM, brightness ${((Features.vector(song.features)?.get(4) ?: 0f)*100).toInt()}%, vocal ${((Features.vector(song.features)?.get(9) ?: 0f)*100).toInt()}%\n", "انرژی ${(song.energy*100).toInt()}٪، تمپو ${song.bpm}، روشنایی ${((Features.vector(song.features)?.get(4) ?: 0f)*100).toInt()}٪، صدا ${((Features.vector(song.features)?.get(9) ?: 0f)*100).toInt()}٪\n"))
+            append(tr(fa, "Provenance: ${song.analysisSource}\nConfidence: ${(song.confidence*100).toInt()}%\n", "منبع: ${song.analysisSource}\nاطمینان: ${(song.confidence*100).toInt()}%\n"))
+            append(tr(fa, "Energy ${(song.energy*100).toInt()}%, tempo ${song.bpm} BPM, brightness ${((Features.vector(song.featureData)?.get(4) ?: 0f)*100).toInt()}%, vocal ${((Features.vector(song.featureData)?.get(9) ?: 0f)*100).toInt()}%\n", "انرژی ${(song.energy*100).toInt()}٪، تمپو ${song.bpm}، روشنایی ${((Features.vector(song.featureData)?.get(4) ?: 0f)*100).toInt()}٪، صدا ${((Features.vector(song.featureData)?.get(9) ?: 0f)*100).toInt()}٪\n"))
             song.onlineExplanation?.takeIf { it.isNotBlank() }?.let { append("\n$it") }
             append(tr(fa, "\nAnalysis is probabilistic; your correction takes priority.", "\nتحلیل احتمالی است و اصلاح شما اولویت دارد."))
         }) }, confirmButton = { TextButton(onClick = { showExplain = false }) { Text(tr(fa, "Close", "بستن")) } })
-    lyrics?.let { result -> AlertDialog(onDismissRequest = { lyrics = null }, title = { Text(tr(fa, "Lyrics • ${LRCLIB}", "متن آهنگ • ${LRCLIB}")) },
+    lyrics?.let { result -> AlertDialog(onDismissRequest = { lyrics = null }, title = { Text(tr(fa, "Lyrics • LRCLIB", "متن آهنگ • LRCLIB")) },
         text = { LazyColumn { item { Text(result.lyrics.ifBlank { null } ?: tr(fa, "No synchronized/plain lyrics available", "متن معمولی/همگام موجود نیست")) }; item { Text(LRCLIBUrl, style = MaterialTheme.typography.bodySmall) } } },
         confirmButton = { TextButton(onClick = { lyrics = null }) { Text(tr(fa, "Close", "بستن")) } })
     }

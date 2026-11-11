@@ -80,7 +80,7 @@ object AiSettings {
     fun automatic(context: Context) = prefs(context).getBoolean("autoOnline", false)
     fun maxUploadBytes(context: Context) = prefs(context).getInt("maxUploadMb", 15) * 1024L * 1024L
     fun dailyLimit(context: Context) = prefs(context).getInt("dailyLimit", 20)
-    fun model(context: Context) = prefs(context).getString("model", "gemini-3.5-flash") ?: "gemini-3.5-flash"
+    fun model(context: Context) = prefs(context).getString("model", "gemini-2.5-flash") ?: "gemini-2.5-flash"
     fun endpoint(context: Context) = prefs(context).getString("secureEndpoint", "") ?: ""
     fun prefs(context: Context) = context.applicationContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
 }

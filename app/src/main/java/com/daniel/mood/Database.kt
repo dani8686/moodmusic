@@ -76,6 +76,7 @@ data class PlaylistWithCount(val id: Long, val name: String, val createdAt: Long
 interface SongDao {
     @Query("SELECT * FROM songs WHERE id=:id") suspend fun get(id: Long): Song?
     @Upsert suspend fun put(song: Song)
+    @Query("UPDATE songs SET feedback=:feedback WHERE id=:id") suspend fun feedback(id: Long, feedback: Int)
     @Query("UPDATE songs SET seen=:seen WHERE id=:id") suspend fun touch(id: Long, seen: Long)
     @Query("DELETE FROM songs WHERE seen != :seen") suspend fun prune(seen: Long)
     @Query("SELECT mood, COUNT(*) AS count FROM songs GROUP BY mood") fun counts(): Flow<List<MoodCount>>

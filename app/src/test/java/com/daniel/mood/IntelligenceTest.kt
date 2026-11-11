@@ -6,7 +6,7 @@ import org.junit.Test
 class IntelligenceTest {
     private fun song(id: Long, mood: Int, energy: Float, bpm: Float = 120f) = Song(id = id, uri = "content://$id", title = "Track $id", artist = "Artist", album = "Album", duration = 180000, size = 1000, modified = 1, added = id,
         mood = mood, secondary = mood, confidence = .8f, bpm = bpm, energy = energy, reason = "", manual = false, seen = 1,
-        autoMood = mood, analysisVersion = 2, features = "", schemaVersion = 2)
+        autoMood = mood, analysisVersion = 2, featureData = "")
 
     @Test fun listeningDnaIsIncrementalAndSkipsHaveNegativeWeight() {
         val calm = song(1, Moods.CALM, .1f, 75f)
