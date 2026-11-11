@@ -40,9 +40,9 @@ class IntelligenceTest {
     @Test fun djExcludesRecentlyPlayedAndPrefersCompatibleTempo() {
         val library = listOf(song(1, Moods.HAPPY, .6f, 120f), song(2, Moods.HAPPY, .62f, 122f), song(3, Moods.SAD, .1f, 60f))
         val current = library[0]
-        val next = SmartDjSelector.next(library, current, emptyList(), setOf(2), null, DjSettings(Moods.HAPPY, .6f, 120f, true))
+        val next = SmartDjSelector.next(library, current, null, listOf(2L), DjConfig(mode = "party", bpmMatching = true, energyMatching = true))
         assertNotEquals(2L, next?.id)
-        val available = SmartDjSelector.next(library, current, emptyList(), emptySet(), null, DjSettings(Moods.HAPPY, .6f, 120f, true))
+        val available = SmartDjSelector.next(library, current, null, emptyList(), DjConfig(mode = "party", bpmMatching = true, energyMatching = true))
         assertEquals(2L, available?.id)
     }
 }
