@@ -1,55 +1,50 @@
-# Mood Music Sorter 2.0
+# Mood Music Sorter 3.0 (V3 development)
 
-اپلیکیشن آفلاین اندروید برای دسته‌بندی حال‌وهوای موسیقی، پخش پس‌زمینه، مدیریت کتابخانه و خروجی واقعی فایل‌ها.
+اپلیکیشن اندروید `com.daniel.mood` با دسته‌بندی آفلاین صوت و قابلیت‌های V3: Music DNA، Radar، Mood Journey، Smart DJ، Time Machine، Music Twin فارسی/انگلیسی و Providerهای اختیاری آنلاین.
 
-- Package: `com.daniel.mood`
-- Version: `2.0` (`versionCode=2`)
-- Android 8.0 (API 26) تا Android 14 (target/compile 34)
-- توسعه‌دهنده: **Danial Mousavi**
-- بدون مجوز INTERNET، بدون API پولی و بدون ارسال فایل صوتی
+- Android 8.0 (API 26)، target/compile 34، Kotlin/Compose/Media3/Room
+- حالت‌های Offline، Hybrid (پیشنهادی) و Online AI
+- حفظ کتابخانه، اصلاحات دستی، پلی‌لیست‌ها و تنظیمات V2 با Migration افزایشی ۲→۳
+- ارسال صدا فقط با رضایت صریح، سیاست Wi-Fi/حجم/سهمیه، کش و Fallback محلی
+- هیچ کلید مخفی یا هزینه سرویس میزبانی‌شده در APK وجود ندارد
 
-## اجرا و ساخت
+**وضعیت: PARTIAL** — برای نتیجه تأییدشده Build، تست و APK به آخرین اجرای [Actions](../../actions) مراجعه کنید. تست دستگاه فیزیکی Redmi/MIUI، Crossfade شنیداری، OTG/Bluetooth و Providerهای واقعی هنوز باید جداگانه تأیید شود.
+
+## ساخت و تست
 
 ```bash
 ./gradlew testDebugUnitTest lintDebug assembleDebug
 ./gradlew assembleRelease
 ```
 
-APK آزمایشی Debug در `app/build/outputs/apk/debug/app-debug.apk` ساخته می‌شود. اگر Secrets امضا تنظیم نشده باشد، Release با کلید Debug امضا می‌شود و فقط برای آزمایش است؛ برای انتشار و به‌روزرسانی پایدار باید Secrets زیر را در GitHub Actions تنظیم کنید:
+بدون Secrets امضا، Release با کلید Debug ساخته می‌شود و فقط TEST است. امضای Production نیازمند `MOOD_KEYSTORE_BASE64`، `MOOD_KEYSTORE_PASSWORD`، `MOOD_KEY_ALIAS` و `MOOD_KEY_PASSWORD` در Actions Secrets است. کلید قدیمی عمومی افشاشده است و استفاده مجدد نمی‌شود.
 
-- `MOOD_KEYSTORE_BASE64`
-- `MOOD_KEYSTORE_PASSWORD`
-- `MOOD_KEY_ALIAS`
-- `MOOD_KEY_PASSWORD`
-- مسیر فایل داخل Runner به‌صورت خودکار `MOOD_KEYSTORE_FILE` تنظیم می‌شود.
+## قابلیت‌های اصلی
 
-## قابلیت‌ها
+1. **تحلیل محلی:** MediaCodec/FFT و ویژگی‌های RMS، طیف، Chroma، Onset و BPM؛ عنوان/نام فایل وارد دسته‌بند نمی‌شود. ده دسته و یادگیری centroid اصلاحات V2 حفظ شده است.
+2. **Music DNA:** زمان واقعی شنیدن، تکمیل، Skip، Like/Dislike و ویژگی‌های صوتی؛ قابل بازنشانی مستقل.
+3. **Radar:** پیشنهاد محلی/کاتالوگ آنلاین اختیاری با دلیل، Wishlist، کش و حذف آهنگ‌های اخیر/Dislike.
+4. **Journey و Smart DJ:** سفر ذخیره‌شدنی بین Moodها و Crossfade واقعی دو Player با تنظیم BPM/انرژی/Familiarity.
+5. **Time Machine:** رویدادهای V3، تقویم و ماه‌ها، آمار، On This Day، CSV و پلی‌لیست تاریخی.
+6. **Music Twin:** Actionهای کنترل‌شده فارسی/انگلیسی، تفسیر آنلاین اختیاری و تأیید عمل حذفی؛ اجرای دلخواه کد/Action خارجی مجاز نیست.
+7. **کتابخانه V2:** جستجو/مرتب‌سازی، اسکن افزایشی، پلی‌لیست/صف، MediaSession، کپی SAF و ZIP/Share واقعی.
+8. **Online اختیاری:** Gemini برای صدا/گفتگو، iTunes برای کاتالوگ و LRCLIB برای Lyrics. Provider قابل تعویض است و در نبود اتصال تحلیل محلی باقی می‌ماند.
 
-1. **تحلیل محلی صوت:** نمونه‌برداری از سه بخش فایل، MediaCodec، FFT، RMS و دینامیک، Centroid/Rolloff/Flux، Chroma و تخمین مُد، Zero Crossing، Bass، Onset و تخمین BPM. هیچ عنوان، نام فایل یا تگ ID3 وارد دسته‌بند نمی‌شود.
-2. **ده دسته:** شاد، غمگین، آرام، بارونی، نوستالژیک، عاشقانه، ورزشی، پرانرژی، احساسی و بی‌کلام؛ دسته جدا برای فایل خراب/نشده. نتایج کم‌اطمینان با «بازبینی» نمایش داده می‌شوند.
-3. **یادگیری واقعی و قابل بازگشت:** هر اصلاح دستی، بردار صوتی نرمال‌شده را به centroid همان دسته اضافه می‌کند. تغییر اصلاح، بردار قبلی را کم و بردار تازه را اضافه می‌کند. «بازگشت به تشخیص خودکار» اثر اصلاح را از centroid حذف می‌کند. اطلاعات در Room باقی می‌مانند و تأثیر یادگیری محدود است تا چند اصلاح کل مدل را مختل نکنند.
-4. **پخش Media3:** سرویس Foreground مستقل از Activity، MediaSession و اعلان سیستم، Audio Focus و Becoming Noisy، صف، حذف و جابه‌جایی، Shuffle و سه حالت Repeat، Seek و بازیابی صف/موقعیت پس از ساخت دوباره فرایند (بدون شروع ناخواسته صدا).
-5. **کتابخانه:** جستجوی عنوان/خواننده، مرتب‌سازی، اسکن افزایشی، کش ویژگی‌ها، حذف رکورد فایل‌های حذف‌شده، جلوگیری از تکرار بر اساس MediaStore ID، پلی‌لیست با ساخت/تغییر نام/حذف و افزودن/حذف آهنگ.
-6. **خروجی:** کپی بایت‌های واقعی به پوشه دسته از طریق SAF (از جمله OTG سازگار)، نام یکتا و بدون بازنویسی، پیشرفت و گزارش خطا، ZIP واقعی و Sharesheet. برای جلوگیری از خطای Binder، اشتراک‌گذاری دسته‌های بسیار بزرگ در یک بسته حداکثر ۱۰۰ آهنگ و ۱۵۰ مگابایت انجام می‌شود.
-7. **رابط و آیکون:** رابط Compose تیره، فارسی RTL و انگلیسی، رنگ متناسب با دسته، کاور آلبوم، صف پخش و آیکون Adaptive از طرح اختصاصی کاربر.
+## حریم خصوصی و هزینه
+
+Offline پیش‌فرض است. آپلود صوتی بدون رضایت انجام نمی‌شود. کلید شخصی پیشرفته با Android Keystore رمز می‌شود، اما برای انتشار عمومی Backend امن HTTPS لازم است و در این مخزن میزبانی نشده است. سهمیه/قیمت/منطقه Provider ممکن است تغییر کند و Free Tier دائمی تضمین نمی‌شود. جزئیات رسمی Privacy/Retention و محدودیت‌ها در [docs/V3.md](docs/V3.md) ثبت شده است.
 
 ## معماری
 
-- `AudioAnalysis.kt` / `MoodEngine.kt`: Decode و ویژگی‌های صوتی، امتیازدهی و یادگیری centroid
-- `Database.kt`: Room نسخه ۲، Migration غیرمخرب از نسخه ۱، اصلاحات و پلی‌لیست‌ها
-- `ScanService.kt`: اسکن افزایشی با حداکثر دو Worker و WakeLock محدود
-- `PlaybackService.kt`: Media3/ExoPlayer و ذخیره صف
-- `CategoryExport.kt` / `ExportService.kt`: SAF، کپی، ZIP و پیشرفت پس‌زمینه
-- `MainActivity.kt` / `PlayerUi.kt` / `Theme.kt`: رابط فارسی/انگلیسی
-
-## امنیت کلید قدیمی — مهم
-
-نسخه اولیه مخزن، فایل `mood-source (1).zip` را با `signing.p12` و رمز ثابت در Gradle منتشر کرده بود. بنابراین آن کلید **افشاشده و ناامن** است. سورس در شاخه V2 از ZIP خارج شده و کلید و رمز از وضعیت فعلی حذف شده‌اند. تاریخچه عمومی Git عمداً بازنویسی نشده است؛ حذف Commit جدید به‌تنهایی افشای قبلی را برطرف نمی‌کند.
-
-برای انتشار واقعی باید یک کلید تازه و پشتیبان‌گیری‌شده استفاده شود. تعویض کلید به این معنی است که APK جدید روی نسخه امضاشده با کلید قدیمی به‌صورت Update نصب نمی‌شود؛ ابتدا از اطلاعات مهم پشتیبان بگیرید و نسخه قبلی را حذف کنید. برای حفظ کلید تازه، آن را فقط در محل امن خصوصی و GitHub Actions Secrets نگه دارید.
+- `AudioAnalysis.kt` / `MoodEngine.kt`: تحلیل محلی و یادگیری اصلاحات
+- `Database.kt` / `V3Database.kt`: Room 3، Migration و Intelligence DAO
+- `MusicIntelligence.kt`: DNA، Radar، Journey و انتخاب DJ
+- `OnlineProviders.kt`: Providerها، CredentialStore، Consent/Network policy و cache
+- `PlaybackService.kt`: Media3، telemetry و dual-player crossfade
+- `MusicTwin.kt`: Grammar و Actionهای کنترل‌شده
+- `V3*Screens.kt`: رابط V3 فارسی RTL/انگلیسی
+- `CategoryExport.kt` / `ExportService.kt`: خروجی واقعی V2
 
 ## محدودیت‌های صادقانه
 
-- تشخیص حال‌وهوا یک مدل سیگنال محلی و تطبیقی است، نه مدل اعتبارسنجی‌شده روی داده برچسب‌خورده فارسی. «بارونی»، «نوستالژیک» و «بی‌کلام» ذهنی/دشوار هستند و ممکن است نیاز به اصلاح داشته باشند.
-- تست OTG، بلوتوث، صفحه قفل، MIUI و اندازه کتابخانه واقعی به دستگاه فیزیکی نیاز دارد؛ موفقیت Build به‌تنهایی تأیید این موارد نیست.
-- صحت نصب و امضای APK در CI بررسی می‌شود. وضعیت آخرین اجرا در [Actions](../../actions) قابل مشاهده است.
+Mood تشخیصی احتمالی است و اصلاح کاربر اولویت دارد. Beat quantization به معنی Beat-matching کامل DJ نیست. Build موفق جای تست Redmi، میزان باتری، ۱۲۰۰+ آهنگ یا صحت Provider را نمی‌گیرد. Apple quota/terms و عملیات Backend امن هنوز PARTIAL/BLOCKED هستند؛ جزئیات در سند V3.

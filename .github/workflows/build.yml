@@ -64,10 +64,11 @@ jobs:
           APK=app/build/outputs/apk/release/app-release.apk
           test -s "$APK"
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | head -n 8
-          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | grep -q "package: name='com.daniel.mood' versionCode='2' versionName='2.0'"
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | grep -q "package: name='com.daniel.mood' versionCode='30' versionName='3.0'"
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose "$APK"
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump permissions "$APK" | tee /tmp/permissions.txt
-          ! grep -q 'android.permission.INTERNET' /tmp/permissions.txt
+          grep -q 'android.permission.INTERNET' /tmp/permissions.txt
+          ! grep -q 'android.permission.RECORD_AUDIO' /tmp/permissions.txt
           sha256sum "$APK" | tee app/build/outputs/apk/release/app-release.apk.sha256
       - name: Publish installable test APK and exact metadata
         if: github.ref == 'refs/heads/arena/fa1fad68-moodmusic'
@@ -75,24 +76,24 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           APK=app/build/outputs/apk/release/app-release.apk
-          cp "$APK" /tmp/MoodMusicSorter-2.0-test.apk
-          cp app/build/outputs/apk/release/app-release.apk.sha256 /tmp/MoodMusicSorter-2.0-test.apk.sha256
+          cp "$APK" /tmp/MoodMusicSorter-3.0-test.apk
+          cp app/build/outputs/apk/release/app-release.apk.sha256 /tmp/MoodMusicSorter-3.0-test.apk.sha256
           {
-            echo 'Mood Music Sorter 2.0 — installable TEST APK'
+            echo 'Mood Music Sorter 3.0 — installable TEST APK'
             "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | head -n 1
             echo "APK bytes: $(stat -c '%s' "$APK")"
             echo "SHA-256: $(sha256sum "$APK" | cut -d' ' -f1)"
             echo 'Signing: debug-signed test release unless MOOD_* production secrets are configured.'
             echo 'Physical Redmi/MIUI/OTG/Bluetooth testing is still required.'
           } > /tmp/APK-INFO.txt
-          if ! gh release view v2.0.0-test >/dev/null 2>&1; then
-            gh release create v2.0.0-test --prerelease --target "$GITHUB_SHA" --title 'Mood Music Sorter 2.0 — Test' --notes 'Integrated V2 test build. See APK-INFO.txt and README.md. Production signing requires MOOD_* Actions secrets.'
+          if ! gh release view v3.0.0-test >/dev/null 2>&1; then
+            gh release create v3.0.0-test --prerelease --target "$GITHUB_SHA" --title 'Mood Music Sorter 3.0 — Test' --notes 'Integrated V3 test build. See APK-INFO.txt and README.md. Production signing requires MOOD_* Actions secrets.'
           fi
-          gh release upload v2.0.0-test --clobber /tmp/MoodMusicSorter-2.0-test.apk /tmp/MoodMusicSorter-2.0-test.apk.sha256 /tmp/APK-INFO.txt
+          gh release upload v3.0.0-test --clobber /tmp/MoodMusicSorter-3.0-test.apk /tmp/MoodMusicSorter-3.0-test.apk.sha256 /tmp/APK-INFO.txt
       - name: Upload signed release APK
         uses: actions/upload-artifact@v4
         with:
-          name: MoodMusicSorter-2.0-release
+          name: MoodMusicSorter-3.0-release
           path: |
             app/build/outputs/apk/release/app-release.apk
             app/build/outputs/apk/release/app-release.apk.sha256
@@ -101,7 +102,7 @@ jobs:
       - name: Upload debug APK and test reports
         uses: actions/upload-artifact@v4
         with:
-          name: MoodMusicSorter-2.0-debug-and-tests
+          name: MoodMusicSorter-3.0-debug-and-tests
           path: |
             app/build/outputs/apk/debug/app-debug.apk
             app/build/reports/
